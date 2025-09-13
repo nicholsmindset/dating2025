@@ -1,0 +1,19 @@
+{
+  "name": "islamic-dating-website",
+  "version": "1.0.0",
+  "description": "Islamic dating website for widows and divorced individuals",
+  "main": "server.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd backend && npm run dev",
+    "client": "cd frontend && npm start",
+    "build": "cd frontend && npm run build",
+    "install-deps": "npm install && cd frontend && npm install && cd ../backend && npm install"
+  },
+  "keywords": ["islamic", "dating", "marriage", "halal"],
+  "author": "Islamic Dating Platform",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
+}
