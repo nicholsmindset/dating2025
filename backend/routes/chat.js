@@ -3,11 +3,11 @@ const Chat = require('../models/Chat');
 const User = require('../models/User');
 const { auth, premiumAuth } = require('../middleware/auth');
 const { pusherService } = require('../services/pusherService');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../config/rateLimiter');
 const router = express.Router();
 
 // Rate limiting for chat operations
-const chatRateLimit = rateLimit({
+const chatRateLimit = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // limit each IP to 50 requests per windowMs
   message: 'Too many chat requests, please try again later'
@@ -38,7 +38,7 @@ router.post('/:chatId/typing', auth, async (req, res) => {
   }
 });
 
-const messageRateLimit = rateLimit({
+const messageRateLimit = createRateLimiter({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 10, // limit each IP to 10 messages per minute
   message: 'Too many messages sent, please slow down'

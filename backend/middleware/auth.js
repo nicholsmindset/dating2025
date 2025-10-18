@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const config = require('../config/env');
 
 // Authentication middleware
 const auth = async (req, res, next) => {
@@ -18,7 +19,7 @@ const auth = async (req, res, next) => {
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
     // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, config.JWT_SECRET);
     
     // Get user from database
     const user = await User.findById(decoded.userId).select('-password');
@@ -92,7 +93,7 @@ const adminAuth = async (req, res, next) => {
     
     // Check if user is admin (you can add an isAdmin field to User model)
     // For now, we'll check if user email is in admin list
-    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(email => email.trim());
+    const adminEmails = config.ADMIN_EMAILS;
     
     if (!adminEmails.includes(user.email)) {
       return res.status(403).json({
@@ -193,7 +194,7 @@ const optionalAuth = async (req, res, next) => {
     }
 
     const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, config.JWT_SECRET);
     const user = await User.findById(decoded.userId).select('-password');
     
     if (user && user.isActive) {
