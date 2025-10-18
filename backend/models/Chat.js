@@ -80,6 +80,15 @@ const chatSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  status: {
+    type: String,
+    enum: ['active', 'deleted'],
+    default: 'active'
+  },
+  deletedFor: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   
   // Last activity
   lastMessage: {
@@ -173,23 +182,25 @@ chatSchema.virtual('unreadCount').get(function() {
 });
 
 // Method to add a message
-chatSchema.methods.addMessage = function(senderId, content, messageType = 'text') {
+chatSchema.methods.addMessage = async function(senderId, content, messageType = 'text') {
   const message = {
     sender: senderId,
     content: content,
     messageType: messageType
   };
-  
+
   this.messages.push(message);
-  
+
   // Update last message
   this.lastMessage = {
     content: content,
     sender: senderId,
     sentAt: new Date()
   };
-  
-  return this.save();
+
+  await this.save();
+
+  return this.messages[this.messages.length - 1];
 };
 
 // Method to mark messages as read
@@ -215,15 +226,65 @@ chatSchema.methods.canUserSendMessage = function(userId) {
   // Check if chat is blocked
   if (this.isBlocked) return false;
   
+  // Normalize ID for comparisons
+  const normalizedUserId = typeof userId === 'string'
+    ? new mongoose.Types.ObjectId(userId)
+    : userId;
+
   // Check if user is participant
-  if (!this.participants.includes(userId)) return false;
-  
+  const isParticipant = this.participants.some(participantId =>
+    participantId.equals(normalizedUserId)
+  );
+
+  if (!isParticipant) {
+    // Allow wali user to send message if supervision allows
+    if (this.waliSupervision &&
+        this.waliSupervision.waliUser &&
+        this.waliSupervision.waliUser.equals(normalizedUserId) &&
+        this.waliSupervision.waliCanView) {
+      return true;
+    }
+
+    return false;
+  }
+
   // Check wali approval if required
   if (this.waliSupervision.isRequired && !this.waliSupervision.isApproved) {
     return false;
   }
-  
+
   return true;
+};
+
+// Method to check if user can view chat messages
+chatSchema.methods.canUserViewMessages = function(userId) {
+  const normalizedUserId = typeof userId === 'string'
+    ? new mongoose.Types.ObjectId(userId)
+    : userId;
+
+  if (!this.isActive || this.isBlocked) {
+    return false;
+  }
+
+  const isParticipant = this.participants.some(participantId =>
+    participantId.equals(normalizedUserId)
+  );
+
+  if (isParticipant) {
+    if (this.waliSupervision.isRequired && !this.waliSupervision.isApproved) {
+      return false;
+    }
+
+    return true;
+  }
+
+  if (this.waliSupervision &&
+      this.waliSupervision.waliUser &&
+      this.waliSupervision.waliCanView) {
+    return this.waliSupervision.waliUser.equals(normalizedUserId);
+  }
+
+  return false;
 };
 
 // Method to request wali approval
@@ -276,14 +337,37 @@ chatSchema.statics.createChat = function(participant1Id, participant2Id, require
     participants: [participant1Id, participant2Id],
     chatType: requireWaliApproval ? 'wali_supervised' : 'direct'
   };
-  
+
   if (requireWaliApproval) {
     chatData.waliSupervision = {
       isRequired: true,
       isApproved: false
     };
   }
-  
+
+  return this.create(chatData);
+};
+
+// Alias for routes expecting createNewChat helper
+chatSchema.statics.createNewChat = function(participant1Id, participant2Id, options = {}) {
+  const requireWaliApproval = Boolean(options.requireWaliApproval);
+
+  const chatData = {
+    participants: [participant1Id, participant2Id],
+    chatType: requireWaliApproval ? 'wali_supervised' : 'direct',
+    isActive: true
+  };
+
+  if (requireWaliApproval || options.waliUser) {
+    chatData.waliSupervision = {
+      isRequired: requireWaliApproval,
+      isApproved: false,
+      waliUser: options.waliUser || undefined,
+      waliCanView: options.waliCanView !== undefined ? options.waliCanView : true,
+      requestedAt: requireWaliApproval ? new Date() : undefined
+    };
+  }
+
   return this.create(chatData);
 };
 
