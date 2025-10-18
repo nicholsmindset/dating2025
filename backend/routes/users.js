@@ -3,14 +3,15 @@ const User = require('../models/User');
 const { auth, premiumAuth, adminAuth } = require('../middleware/auth');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../config/rateLimiter');
+const config = require('../config/env');
 const router = express.Router();
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: config.CLOUDINARY_CLOUD_NAME,
+  api_key: config.CLOUDINARY_API_KEY,
+  api_secret: config.CLOUDINARY_API_SECRET
 });
 
 // Configure multer for file uploads
@@ -30,13 +31,13 @@ const upload = multer({
 });
 
 // Rate limiting
-const profileViewLimit = rateLimit({
+const profileViewLimit = createRateLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 100, // limit each IP to 100 profile views per hour
   message: 'Too many profile views, please try again later'
 });
 
-const updateProfileLimit = rateLimit({
+const updateProfileLimit = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // limit each IP to 5 profile updates per 15 minutes
   message: 'Too many profile updates, please try again later'

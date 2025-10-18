@@ -1,11 +1,12 @@
 const Pusher = require('pusher');
+const config = require('../config/env');
 
 // Initialize Pusher with environment variables
 const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID,
-  key: process.env.PUSHER_KEY,
-  secret: process.env.PUSHER_SECRET,
-  cluster: process.env.PUSHER_CLUSTER,
+  appId: config.PUSHER_APP_ID,
+  key: config.PUSHER_KEY,
+  secret: config.PUSHER_SECRET,
+  cluster: config.PUSHER_CLUSTER,
   useTLS: true
 });
 

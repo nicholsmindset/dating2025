@@ -1,13 +1,14 @@
 const express = require('express');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../config/rateLimiter');
 const PaymentService = require('../services/paymentService');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const config = require('../config/env');
+const stripe = require('stripe')(config.STRIPE_SECRET_KEY);
 const router = express.Router();
 
 // Rate limiting for subscription operations
-const subscriptionRateLimit = rateLimit({
+const subscriptionRateLimit = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // limit each IP to 20 requests per windowMs
   message: 'Too many subscription requests, please try again later'
@@ -238,7 +239,7 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(req.body, sig, config.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);

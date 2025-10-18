@@ -2,11 +2,11 @@ const express = require('express');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const { pusherService } = require('../services/pusherService');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../config/rateLimiter');
 const router = express.Router();
 
 // Rate limiting for profile operations
-const profileRateLimit = rateLimit({
+const profileRateLimit = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // limit each IP to 50 requests per windowMs
   message: 'Too many profile requests, please try again later'

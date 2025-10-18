@@ -3,12 +3,13 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../config/rateLimiter');
+const config = require('../config/env');
 
 const router = express.Router();
 
 // Rate limiting for auth routes
-const authLimiter = rateLimit({
+const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // limit each IP to 5 requests per windowMs
   message: 'Too many authentication attempts, please try again later.'
@@ -16,8 +17,8 @@ const authLimiter = rateLimit({
 
 // Generate JWT token
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d'
+  return jwt.sign({ userId }, config.JWT_SECRET, {
+    expiresIn: config.JWT_EXPIRE
   });
 };
 
@@ -320,7 +321,7 @@ router.post('/forgot-password', [
     // Generate reset token (in production, implement email sending)
     const resetToken = jwt.sign(
       { userId: user._id, purpose: 'password_reset' },
-      process.env.JWT_SECRET,
+      config.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
@@ -367,7 +368,7 @@ router.post('/reset-password', [
     // Verify token
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = jwt.verify(token, config.JWT_SECRET);
     } catch (error) {
       return res.status(400).json({
         success: false,

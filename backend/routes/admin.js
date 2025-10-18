@@ -2,11 +2,11 @@ const express = require('express');
 const User = require('../models/User');
 const Chat = require('../models/Chat');
 const { auth, adminAuth } = require('../middleware/auth');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiter } = require('../config/rateLimiter');
 const router = express.Router();
 
 // Rate limiting for admin operations
-const adminRateLimit = rateLimit({
+const adminRateLimit = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   message: 'Too many admin requests, please try again later'
