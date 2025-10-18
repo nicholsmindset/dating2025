@@ -117,8 +117,14 @@ router.post('/start', auth, chatRateLimit, async (req, res) => {
     }
 
     // Check if users have blocked each other
-    if (req.user.blockedUsers.includes(recipientId) || 
-        recipient.blockedUsers.includes(req.user.id)) {
+    const requesterBlockedUsers = Array.isArray(req.user.blockedUsers) ? req.user.blockedUsers : [];
+    const recipientBlockedUsers = Array.isArray(recipient.blockedUsers) ? recipient.blockedUsers : [];
+
+    const requesterBlockedIds = requesterBlockedUsers.map(id => id.toString());
+    const recipientBlockedIds = recipientBlockedUsers.map(id => id.toString());
+
+    if (requesterBlockedIds.includes(recipientId.toString()) ||
+        recipientBlockedIds.includes(req.user.id.toString())) {
       return res.status(403).json({ message: 'Cannot start chat with this user' });
     }
 
@@ -169,12 +175,13 @@ router.post('/:chatId/messages', auth, messageRateLimit, async (req, res) => {
 
     // Check if user can send messages
     const canSend = await chat.canUserSendMessage(req.user.id);
-    if (!canSend) {
-      return res.status(403).json({ 
-        message: 'Cannot send messages in this chat',
-        requiresWaliApproval: chat.waliSupervision.required && !chat.waliSupervision.approved
-      });
-    }
+      if (!canSend) {
+        const requiresApproval = chat.waliSupervision?.isRequired && !chat.waliSupervision.isApproved;
+        return res.status(403).json({
+          message: 'Cannot send messages in this chat',
+          requiresWaliApproval: requiresApproval
+        });
+      }
 
     // Add message to chat
     const message = await chat.addMessage(req.user.id, content, type);
