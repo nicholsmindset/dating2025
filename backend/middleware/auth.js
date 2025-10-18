@@ -38,15 +38,11 @@ const auth = async (req, res, next) => {
       });
     }
 
-    // Add user to request object
+    const userData = user.toObject({ virtuals: true });
     req.user = {
+      ...userData,
       userId: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      gender: user.gender,
-      subscription: user.subscription,
-      isVerified: user.isVerified
+      id: user._id.toString(),
     };
 
     next();

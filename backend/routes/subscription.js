@@ -13,6 +13,27 @@ const subscriptionRateLimit = rateLimit({
   message: 'Too many subscription requests, please try again later'
 });
 
+// Stripe webhook endpoint should not require authentication
+router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    await PaymentService.handleWebhook(event);
+    res.json({received: true});
+  } catch (error) {
+    console.error('Webhook handler error:', error);
+    res.status(500).json({ message: 'Webhook handler error' });
+  }
+});
+
 router.use(auth, subscriptionRateLimit);
 
 // Get current subscription status
@@ -229,27 +250,6 @@ router.get('/history', async (req, res) => {
   } catch (error) {
     console.error('Get subscription history error:', error);
     res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Stripe webhook endpoint
-router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  try {
-    await PaymentService.handleWebhook(event);
-    res.json({received: true});
-  } catch (error) {
-    console.error('Webhook handler error:', error);
-    res.status(500).json({ message: 'Webhook handler error' });
   }
 });
 

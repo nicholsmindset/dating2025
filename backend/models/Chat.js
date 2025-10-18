@@ -80,6 +80,11 @@ const chatSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'deleted'],
+    default: 'active'
+  },
   
   // Last activity
   lastMessage: {
@@ -173,23 +178,23 @@ chatSchema.virtual('unreadCount').get(function() {
 });
 
 // Method to add a message
-chatSchema.methods.addMessage = function(senderId, content, messageType = 'text') {
+chatSchema.methods.addMessage = async function(senderId, content, messageType = 'text') {
   const message = {
     sender: senderId,
-    content: content,
-    messageType: messageType
+    content,
+    messageType
   };
-  
+
   this.messages.push(message);
-  
-  // Update last message
+
   this.lastMessage = {
-    content: content,
+    content,
     sender: senderId,
     sentAt: new Date()
   };
-  
-  return this.save();
+
+  const savedChat = await this.save();
+  return savedChat.messages[savedChat.messages.length - 1];
 };
 
 // Method to mark messages as read
@@ -216,14 +221,20 @@ chatSchema.methods.canUserSendMessage = function(userId) {
   if (this.isBlocked) return false;
   
   // Check if user is participant
-  if (!this.participants.includes(userId)) return false;
-  
-  // Check wali approval if required
-  if (this.waliSupervision.isRequired && !this.waliSupervision.isApproved) {
+  if (!this.participants.some(participant => participant.toString() === userId.toString())) {
     return false;
   }
-  
+
+  // Check wali approval if required
+  if (this.waliSupervision?.isRequired && !this.waliSupervision.isApproved) {
+    return false;
+  }
+
   return true;
+};
+
+chatSchema.methods.canUserViewMessages = function(userId) {
+  return this.canUserSendMessage(userId);
 };
 
 // Method to request wali approval
@@ -266,7 +277,8 @@ chatSchema.methods.blockChat = function(blockedByUserId) {
   this.blockedBy = blockedByUserId;
   this.blockedAt = new Date();
   this.isActive = false;
-  
+  this.status = 'inactive';
+
   return this.save();
 };
 
@@ -285,6 +297,10 @@ chatSchema.statics.createChat = function(participant1Id, participant2Id, require
   }
   
   return this.create(chatData);
+};
+
+chatSchema.statics.createNewChat = function(participant1Id, participant2Id, requireWaliApproval = false) {
+  return this.createChat(participant1Id, participant2Id, requireWaliApproval);
 };
 
 // Ensure virtual fields are serialized
