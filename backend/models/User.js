@@ -150,10 +150,22 @@ const userSchema = new mongoose.Schema({
       enum: ['free', 'premium'],
       default: 'free'
     },
+    isPremium: {
+      type: Boolean,
+      default: false
+    },
+    status: {
+      type: String,
+      enum: ['active', 'inactive', 'cancelled', 'expired'],
+      default: 'active'
+    },
     startDate: Date,
     endDate: Date,
     stripeCustomerId: String,
     stripeSubscriptionId: String,
+    amount: Number,
+    currency: String,
+    cancelledAt: Date,
     profileViewsThisMonth: {
       type: Number,
       default: 0
@@ -204,7 +216,7 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
   profileViews: [{
-    viewedBy: {
+    profileId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
@@ -275,7 +287,7 @@ userSchema.index({ 'subscription.plan': 1 });
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
@@ -285,6 +297,16 @@ userSchema.pre('save', async function(next) {
   }
 });
 
+userSchema.pre('save', function(next) {
+  if (this.subscription) {
+    const hasPremiumPlan = this.subscription.plan === 'premium' || this.subscription.isPremium === true;
+    const isActiveStatus = this.subscription.status === 'active';
+    const withinPeriod = !this.subscription.endDate || new Date(this.subscription.endDate) >= new Date();
+    this.subscription.isPremium = hasPremiumPlan && isActiveStatus && withinPeriod;
+  }
+  next();
+});
+
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
@@ -292,50 +314,135 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 
 // Reset monthly profile views
 userSchema.methods.resetMonthlyViews = function() {
+  if (!this.subscription) {
+    this.subscription = {
+      plan: 'free',
+      isPremium: false,
+      status: 'active',
+      profileViewsThisMonth: 0,
+      lastResetDate: new Date()
+    };
+    return true;
+  }
+
   const now = new Date();
-  const lastReset = new Date(this.subscription.lastResetDate);
-  
-  if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
+  const lastReset = this.subscription.lastResetDate ? new Date(this.subscription.lastResetDate) : null;
+
+  if (!lastReset || now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
     this.subscription.profileViewsThisMonth = 0;
     this.subscription.lastResetDate = now;
+    return true;
   }
+
+  return false;
+};
+
+userSchema.methods.isPremium = function() {
+  if (!this.subscription) {
+    return false;
+  }
+
+  const hasPremiumPlan = this.subscription.plan === 'premium' || this.subscription.isPremium === true;
+  const isActiveStatus = this.subscription.status === 'active';
+  const withinPeriod = !this.subscription.endDate || new Date(this.subscription.endDate) >= new Date();
+  const premium = hasPremiumPlan && isActiveStatus && withinPeriod;
+  this.subscription.isPremium = premium;
+  return premium;
+};
+
+userSchema.methods.getMonthlyViewLimit = function() {
+  return this.isPremium() ? Infinity : 10;
+};
+
+userSchema.methods.getRemainingProfileViews = function() {
+  this.resetMonthlyViews();
+  if (this.isPremium()) {
+    return Infinity;
+  }
+
+  const used = this.subscription?.profileViewsThisMonth || 0;
+  return Math.max(0, this.getMonthlyViewLimit() - used);
+};
+
+userSchema.methods.incrementProfileViewCount = function() {
+  this.resetMonthlyViews();
+  if (this.isPremium()) {
+    return this.subscription?.profileViewsThisMonth || 0;
+  }
+
+  this.subscription.profileViewsThisMonth = (this.subscription.profileViewsThisMonth || 0) + 1;
+  return this.subscription.profileViewsThisMonth;
 };
 
 // Check if user can view more profiles
 userSchema.methods.canViewProfile = function(targetUserId) {
-  this.resetMonthlyViews();
-  
+  const resetOccurred = this.resetMonthlyViews();
+
   // Check if trying to view own profile
   if (this._id.toString() === targetUserId) {
     return {
       allowed: false,
       reason: 'Cannot view your own profile',
-      requiresPremium: false
+      requiresPremium: false,
+      resetOccurred
     };
   }
-  
+
   // Premium users can view unlimited profiles
-  if (this.subscription.plan === 'premium') {
+  if (this.isPremium()) {
     return {
       allowed: true,
       reason: null,
-      requiresPremium: false
+      requiresPremium: false,
+      resetOccurred
     };
   }
-  
+
   // Check monthly view limit for free users
-  if (this.subscription.profileViewsThisMonth >= 10) {
+  if ((this.subscription?.profileViewsThisMonth || 0) >= this.getMonthlyViewLimit()) {
     return {
       allowed: false,
       reason: 'Monthly profile view limit reached. Upgrade to premium for unlimited access.',
-      requiresPremium: true
+      requiresPremium: true,
+      resetOccurred
     };
   }
-  
+
   return {
     allowed: true,
     reason: null,
-    requiresPremium: false
+    requiresPremium: false,
+    resetOccurred
+  };
+};
+
+userSchema.methods.hasViewedProfileThisMonth = function(profileId) {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  return (this.profileViews || []).some(view => {
+    const viewDate = new Date(view.viewedAt);
+    return view.profileId?.toString() === profileId.toString() &&
+      viewDate.getMonth() === currentMonth &&
+      viewDate.getFullYear() === currentYear;
+  });
+};
+
+userSchema.methods.recordProfileView = function(profileId) {
+  const alreadyViewed = this.hasViewedProfileThisMonth(profileId);
+  const now = new Date();
+
+  if (!alreadyViewed) {
+    this.profileViews = this.profileViews || [];
+    this.profileViews.push({ profileId, viewedAt: now });
+    const total = this.incrementProfileViewCount();
+    return { alreadyViewed: false, totalViewsThisMonth: total };
+  }
+
+  return {
+    alreadyViewed: true,
+    totalViewsThisMonth: this.subscription?.profileViewsThisMonth || 0
   };
 };
 

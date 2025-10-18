@@ -53,20 +53,21 @@ const Dashboard = () => {
   const [likedProfiles, setLikedProfiles] = useState([]);
   const [viewedProfiles, setViewedProfiles] = useState([]);
   const [subscriptionDialog, setSubscriptionDialog] = useState(false);
-  const { user, updateUser } = useAuth();
+  const { user, isPremiumUser, canViewProfiles, getRemainingViews, refreshProfileViewStatus } = useAuth();
   const navigate = useNavigate();
 
   // Check if user has premium subscription
-  const isPremium = user?.subscription?.plan === 'premium' && 
-                   user?.subscription?.status === 'active';
+  const isPremium = isPremiumUser();
 
   // Calculate remaining profile views for free users
-  const remainingViews = isPremium ? 'Unlimited' : 
-                        Math.max(0, 10 - (user?.profileViewsThisMonth || 0));
+  const remainingViews = getRemainingViews();
 
   useEffect(() => {
     fetchProfiles();
     fetchUserInteractions();
+    refreshProfileViewStatus().catch(error => {
+      console.error('Failed to initialize profile view status:', error);
+    });
   }, []);
 
   const fetchProfiles = async () => {
@@ -105,7 +106,7 @@ const Dashboard = () => {
 
   const handleProfileView = async (profile) => {
     // Check if user can view more profiles
-    if (!isPremium && remainingViews <= 0) {
+    if (!isPremium && !canViewProfiles()) {
       setSubscriptionDialog(true);
       return;
     }
@@ -113,17 +114,17 @@ const Dashboard = () => {
     try {
       // Record profile view
       await axios.post(`/api/profiles/${profile._id}/view`);
-      
-      // Update user's view count
-      const updatedUser = {
-        ...user,
-        profileViewsThisMonth: (user.profileViewsThisMonth || 0) + 1
-      };
-      updateUser(updatedUser);
-      
+
+      // Refresh user's view count from server to ensure accurate tracking
+      try {
+        await refreshProfileViewStatus();
+      } catch (statusError) {
+        console.error('Failed to refresh profile view status:', statusError);
+      }
+
       // Add to viewed profiles
-      setViewedProfiles(prev => [...prev, profile._id]);
-      
+      setViewedProfiles(prev => (prev.includes(profile._id) ? prev : [...prev, profile._id]));
+
       // Open profile dialog
       setSelectedProfile(profile);
       setProfileDialogOpen(true);
@@ -378,7 +379,7 @@ const Dashboard = () => {
           {!isPremium && (
             <LinearProgress
               variant="determinate"
-              value={(user?.profileViewsThisMonth || 0) / 10 * 100}
+              value={(user?.subscription?.profileViewsThisMonth || 0) / 10 * 100}
               sx={{ mt: 1, height: 6, borderRadius: 3 }}
             />
           )}

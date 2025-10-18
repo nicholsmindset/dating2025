@@ -126,6 +126,8 @@ router.post('/register', [
       wali,
       subscription: {
         plan: 'free',
+        isPremium: false,
+        status: 'active',
         profileViewsThisMonth: 0,
         lastResetDate: new Date()
       }
