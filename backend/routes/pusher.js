@@ -1,14 +1,27 @@
 const express = require('express');
+const mongoose = require('mongoose');
+const rateLimit = require('express-rate-limit');
 const { pusher } = require('../services/pusherService');
 const { auth } = require('../middleware/auth');
+const Chat = require('../models/Chat');
 const router = express.Router();
 
-// Pusher authentication endpoint for private channels
-router.post('/auth', auth, (req, res) => {
+const pusherAuthLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const authenticateChannel = async (req, res) => {
   try {
     const socketId = req.body.socket_id;
     const channel = req.body.channel_name;
-    const userId = req.user.id;
+    const userId = req.user.userId.toString();
+
+    if (!socketId || !channel) {
+      return res.status(400).json({ error: 'Missing socket or channel information' });
+    }
 
     // Validate that user can access this channel
     if (channel.startsWith('private-user-')) {
@@ -17,36 +30,55 @@ router.post('/auth', auth, (req, res) => {
         return res.status(403).json({ error: 'Unauthorized' });
       }
     } else if (channel.startsWith('private-chat-')) {
-      // For chat channels, we would need to verify the user is part of the chat
-      // This is a simplified version - in production, check chat membership
       const chatId = channel.replace('private-chat-', '');
-      // TODO: Add proper chat membership validation
+
+      if (!mongoose.Types.ObjectId.isValid(chatId)) {
+        return res.status(400).json({ error: 'Invalid chat identifier' });
+      }
+
+      const chat = await Chat.findById(chatId);
+
+      if (!chat) {
+        return res.status(404).json({ error: 'Chat not found' });
+      }
+
+      const isParticipant = chat.participants.some(participant => participant.toString() === userId);
+
+      if (!isParticipant) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
     }
 
     // Generate auth signature
-    const auth = pusher.authenticate(socketId, channel);
-    res.send(auth);
+    const authResponse = pusher.authenticate(socketId, channel);
+    res.send(authResponse);
   } catch (error) {
     console.error('Pusher auth error:', error);
     res.status(500).json({ error: 'Authentication failed' });
   }
-});
+};
+
+// Pusher authentication endpoint for private channels
+router.post('/auth', pusherAuthLimiter, auth, authenticateChannel);
 
 // Pusher presence channel authentication
-router.post('/auth/presence', auth, (req, res) => {
+const authenticatePresenceChannel = (req, res) => {
   try {
     const socketId = req.body.socket_id;
     const channel = req.body.channel_name;
-    const userId = req.user.id;
-    const user = req.user;
+    const userId = req.user.userId.toString();
 
     // User data for presence channel
     const presenceData = {
       user_id: userId,
       user_info: {
         id: userId,
-        name: `${user.firstName} ${user.lastName}`,
-        avatar: user.profilePicture
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        email: req.user.email,
+        profilePhoto: req.user.profilePhoto,
+        gender: req.user.gender,
+        isVerified: req.user.isVerified
       }
     };
 
@@ -56,6 +88,13 @@ router.post('/auth/presence', auth, (req, res) => {
     console.error('Pusher presence auth error:', error);
     res.status(500).json({ error: 'Authentication failed' });
   }
-});
+};
+
+router.post('/auth/presence', pusherAuthLimiter, auth, authenticatePresenceChannel);
 
 module.exports = router;
+module.exports.handlers = {
+  authenticateChannel,
+  authenticatePresenceChannel
+};
+

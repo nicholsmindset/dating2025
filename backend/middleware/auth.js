@@ -40,11 +40,13 @@ const auth = async (req, res, next) => {
 
     // Add user to request object
     req.user = {
+      id: user._id.toString(),
       userId: user._id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       gender: user.gender,
+      profilePhoto: user.profilePhoto,
       subscription: user.subscription,
       isVerified: user.isVerified
     };
@@ -196,11 +198,13 @@ const optionalAuth = async (req, res, next) => {
     
     if (user && user.isActive) {
       req.user = {
+        id: user._id.toString(),
         userId: user._id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         gender: user.gender,
+        profilePhoto: user.profilePhoto,
         subscription: user.subscription,
         isVerified: user.isVerified
       };
