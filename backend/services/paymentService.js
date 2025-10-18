@@ -10,10 +10,16 @@ class PaymentService {
         throw new Error('User not found');
       }
 
+      let customerId = user.subscription?.stripeCustomerId;
+      if (!customerId) {
+        const customer = await this.createOrGetCustomer(userId);
+        customerId = customer.id;
+      }
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: 'sgd',
-        customer: user.stripeCustomerId,
+        customer: customerId,
         metadata: {
           userId: userId.toString(),
           subscriptionType: 'premium',
@@ -37,9 +43,9 @@ class PaymentService {
         throw new Error('User not found');
       }
 
-      if (user.stripeCustomerId) {
+      if (user.subscription?.stripeCustomerId) {
         // Retrieve existing customer
-        const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+        const customer = await stripe.customers.retrieve(user.subscription.stripeCustomerId);
         return customer;
       }
 
@@ -53,7 +59,9 @@ class PaymentService {
       });
 
       // Save customer ID to user
-      user.stripeCustomerId = customer.id;
+      user.subscription = user.subscription || {};
+      user.subscription.stripeCustomerId = customer.id;
+      user.markModified('subscription');
       await user.save();
 
       return customer;
@@ -109,6 +117,19 @@ class PaymentService {
         }
       });
 
+      user.subscription = user.subscription || {};
+      user.subscription.plan = 'premium';
+      user.subscription.status = subscription.status || 'incomplete';
+      user.subscription.stripeSubscriptionId = subscription.id;
+      if (subscription.current_period_start) {
+        user.subscription.startDate = new Date(subscription.current_period_start * 1000);
+      }
+      if (subscription.current_period_end) {
+        user.subscription.endDate = new Date(subscription.current_period_end * 1000);
+      }
+      user.markModified('subscription');
+      await user.save();
+
       return subscription;
     } catch (error) {
       console.error('Error creating subscription:', error);
@@ -131,19 +152,15 @@ class PaymentService {
       const now = new Date();
       const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-      user.subscription = {
-        type: 'premium',
-        status: 'active',
-        startDate: now,
-        endDate: expiryDate,
-        stripeSubscriptionId: paymentIntent.id,
-        amount: paymentIntent.amount / 100, // Convert from cents
-        currency: paymentIntent.currency
-      };
-
-      // Reset monthly profile views for premium users
-      user.profileViewsThisMonth = 0;
-      user.lastProfileViewReset = now;
+      user.subscription = user.subscription || {};
+      user.subscription.plan = 'premium';
+      user.subscription.status = 'active';
+      user.subscription.startDate = now;
+      user.subscription.endDate = expiryDate;
+      user.subscription.stripeSubscriptionId = user.subscription.stripeSubscriptionId || paymentIntent.metadata?.subscriptionId || paymentIntent.id;
+      user.subscription.profileViewsThisMonth = 0;
+      user.subscription.lastResetDate = now;
+      user.markModified('subscription');
 
       await user.save();
 
@@ -172,7 +189,9 @@ class PaymentService {
 
       // Update user record
       user.subscription.status = 'cancelled';
+      user.subscription.plan = 'premium';
       user.subscription.cancelledAt = new Date();
+      user.markModified('subscription');
       await user.save();
 
       return subscription;
@@ -200,7 +219,9 @@ class PaymentService {
 
       // Update user record
       user.subscription.status = 'active';
+      user.subscription.plan = 'premium';
       user.subscription.cancelledAt = null;
+      user.markModified('subscription');
       await user.save();
 
       return subscription;
@@ -218,11 +239,11 @@ class PaymentService {
         throw new Error('User not found');
       }
 
-      if (!user.subscription?.stripeSubscriptionId) {
+      if (!user.subscription?.stripeSubscriptionId || user.subscription.plan !== 'premium') {
         return {
-          type: 'free',
-          status: 'inactive',
-          profileViewsRemaining: Math.max(0, 10 - (user.profileViewsThisMonth || 0))
+          plan: user.subscription?.plan || 'free',
+          status: user.subscription?.status || 'inactive',
+          profileViewsRemaining: Math.max(0, 10 - (user.subscription?.profileViewsThisMonth || 0))
         };
       }
 
@@ -231,13 +252,13 @@ class PaymentService {
       );
 
       return {
-        type: user.subscription.type,
-        status: subscription.status,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        plan: user.subscription.plan,
+        status: subscription.status || user.subscription.status,
+        currentPeriodStart: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : undefined,
+        currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : undefined,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        amount: user.subscription.amount,
-        currency: user.subscription.currency
+        profileViewsThisMonth: user.subscription.profileViewsThisMonth,
+        lastResetDate: user.subscription.lastResetDate
       };
     } catch (error) {
       console.error('Error getting subscription details:', error);
@@ -258,14 +279,22 @@ class PaymentService {
           if (invoice.subscription) {
             const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
             const userId = subscription.metadata.userId;
-            
+
             if (userId) {
               const user = await User.findById(userId);
               if (user) {
                 // Extend subscription
                 const expiryDate = new Date(subscription.current_period_end * 1000);
+                user.subscription = user.subscription || {};
+                user.subscription.plan = 'premium';
+                user.subscription.status = subscription.status || 'active';
                 user.subscription.endDate = expiryDate;
-                user.subscription.status = 'active';
+                user.subscription.startDate = new Date(subscription.current_period_start * 1000);
+                user.subscription.stripeSubscriptionId = subscription.id;
+                user.subscription.stripeCustomerId = subscription.customer;
+                user.subscription.profileViewsThisMonth = 0;
+                user.subscription.lastResetDate = new Date();
+                user.markModified('subscription');
                 await user.save();
               }
             }
@@ -277,11 +306,14 @@ class PaymentService {
           if (failedInvoice.subscription) {
             const subscription = await stripe.subscriptions.retrieve(failedInvoice.subscription);
             const userId = subscription.metadata.userId;
-            
+
             if (userId) {
               const user = await User.findById(userId);
               if (user) {
+                user.subscription = user.subscription || {};
                 user.subscription.status = 'past_due';
+                user.subscription.plan = 'premium';
+                user.markModified('subscription');
                 await user.save();
               }
             }
@@ -291,12 +323,17 @@ class PaymentService {
         case 'customer.subscription.deleted':
           const deletedSubscription = event.data.object;
           const userId = deletedSubscription.metadata.userId;
-          
+
           if (userId) {
             const user = await User.findById(userId);
             if (user) {
+              user.subscription = user.subscription || {};
               user.subscription.status = 'cancelled';
+              user.subscription.plan = 'free';
               user.subscription.endDate = new Date();
+              user.subscription.stripeSubscriptionId = null;
+              user.subscription.stripeCustomerId = deletedSubscription.customer;
+              user.markModified('subscription');
               await user.save();
             }
           }

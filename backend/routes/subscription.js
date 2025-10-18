@@ -6,11 +6,40 @@ const PaymentService = require('../services/paymentService');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const router = express.Router();
 
+const PREMIUM_ACCESS_STATUSES = ['active', 'trialing', 'past_due'];
+const hasPremiumAccess = (subscription = {}) => (
+  subscription.plan === 'premium' && PREMIUM_ACCESS_STATUSES.includes(subscription.status)
+);
+const hasActivePremiumSubscription = (subscription = {}) => (
+  hasPremiumAccess(subscription) && (!subscription.endDate || subscription.endDate > new Date())
+);
+
 // Rate limiting for subscription operations
 const subscriptionRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // limit each IP to 20 requests per windowMs
   message: 'Too many subscription requests, please try again later'
+});
+
+// Stripe webhook endpoint (no auth middleware)
+router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    await PaymentService.handleWebhook(event);
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook handler error:', error);
+    res.status(500).json({ message: 'Webhook handler error' });
+  }
 });
 
 router.use(auth, subscriptionRateLimit);
@@ -34,19 +63,20 @@ router.get('/status', async (req, res) => {
       return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
     }).length;
 
+    const isPremium = hasPremiumAccess(user.subscription);
     const subscriptionData = {
-      isPremium: user.subscription.isPremium,
+      plan: user.subscription.plan,
+      status: user.subscription.status,
       startDate: user.subscription.startDate,
       endDate: user.subscription.endDate,
-      plan: user.subscription.plan,
       monthlyViews,
-      viewsRemaining: user.subscription.isPremium ? 'unlimited' : Math.max(0, 10 - monthlyViews),
+      viewsRemaining: isPremium ? 'unlimited' : Math.max(0, 10 - monthlyViews),
       features: {
-        unlimitedViews: user.subscription.isPremium,
-        unblurredPhotos: user.subscription.isPremium,
-        advancedFilters: user.subscription.isPremium,
-        prioritySupport: user.subscription.isPremium,
-        readReceipts: user.subscription.isPremium
+        unlimitedViews: isPremium,
+        unblurredPhotos: isPremium,
+        advancedFilters: isPremium,
+        prioritySupport: isPremium,
+        readReceipts: isPremium
       }
     };
 
@@ -116,7 +146,7 @@ router.post('/create-payment-intent', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.subscription.isPremium && user.subscription.endDate > new Date()) {
+    if (hasActivePremiumSubscription(user.subscription)) {
       return res.status(400).json({ message: 'You already have an active premium subscription' });
     }
 
@@ -151,7 +181,7 @@ router.post('/create', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.subscription.isPremium && user.subscription.endDate > new Date()) {
+    if (hasActivePremiumSubscription(user.subscription)) {
       return res.status(400).json({ message: 'You already have an active premium subscription' });
     }
 
@@ -232,27 +262,6 @@ router.get('/history', async (req, res) => {
   }
 });
 
-// Stripe webhook endpoint
-router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  try {
-    await PaymentService.handleWebhook(event);
-    res.json({received: true});
-  } catch (error) {
-    console.error('Webhook handler error:', error);
-    res.status(500).json({ message: 'Webhook handler error' });
-  }
-});
-
 // Simulate payment processing
 async function simulatePayment(paymentMethod, amount) {
   // Simulate payment processing delay
@@ -290,7 +299,7 @@ router.post('/check-expired', async (req, res) => {
 
     for (const user of expiredUsers) {
       user.subscription.status = 'expired';
-      user.subscription.type = 'free';
+      user.subscription.plan = 'free';
       await user.save();
     }
 

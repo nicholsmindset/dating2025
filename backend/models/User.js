@@ -150,10 +150,16 @@ const userSchema = new mongoose.Schema({
       enum: ['free', 'premium'],
       default: 'free'
     },
+    status: {
+      type: String,
+      enum: ['inactive', 'active', 'past_due', 'cancelled', 'incomplete', 'trialing', 'expired'],
+      default: 'inactive'
+    },
     startDate: Date,
     endDate: Date,
     stripeCustomerId: String,
     stripeSubscriptionId: String,
+    cancelledAt: Date,
     profileViewsThisMonth: {
       type: Number,
       default: 0

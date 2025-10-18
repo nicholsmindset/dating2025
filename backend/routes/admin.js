@@ -5,6 +5,12 @@ const { auth, adminAuth } = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
+const PREMIUM_ACCESS_STATUSES = ['active', 'trialing', 'past_due'];
+const PREMIUM_SUBSCRIPTION_FILTER = {
+  'subscription.plan': 'premium',
+  'subscription.status': { $in: PREMIUM_ACCESS_STATUSES }
+};
+
 // Rate limiting for admin operations
 const adminRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -21,7 +27,7 @@ router.get('/dashboard', async (req, res) => {
     const [totalUsers, activeUsers, premiumUsers, totalChats, recentReports] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ accountStatus: 'active' }),
-      User.countDocuments({ 'subscription.isPremium': true }),
+      User.countDocuments(PREMIUM_SUBSCRIPTION_FILTER),
       Chat.countDocuments(),
       User.find({ 'reports.0': { $exists: true } })
         .select('firstName lastName email reports')
@@ -83,8 +89,13 @@ router.get('/users', async (req, res) => {
     const filter = {};
     if (status) filter.accountStatus = status;
     if (gender) filter.gender = gender;
-    if (subscription === 'premium') filter['subscription.isPremium'] = true;
-    if (subscription === 'free') filter['subscription.isPremium'] = false;
+    if (subscription === 'premium') {
+      filter['subscription.plan'] = 'premium';
+      filter['subscription.status'] = { $in: PREMIUM_ACCESS_STATUSES };
+    }
+    if (subscription === 'free') {
+      filter['subscription.plan'] = 'free';
+    }
     
     if (search) {
       filter.$or = [
@@ -349,13 +360,14 @@ router.get('/analytics/subscriptions', async (req, res) => {
 
     // Get subscription stats
     const [totalPremium, newPremiumThisPeriod, cancelledThisPeriod] = await Promise.all([
-      User.countDocuments({ 'subscription.isPremium': true }),
+      User.countDocuments(PREMIUM_SUBSCRIPTION_FILTER),
       User.countDocuments({
-        'subscription.isPremium': true,
+        'subscription.plan': 'premium',
+        'subscription.status': { $in: PREMIUM_ACCESS_STATUSES },
         'subscription.startDate': { $gte: daysAgo }
       }),
       User.countDocuments({
-        'subscription.isPremium': false,
+        'subscription.status': 'cancelled',
         'subscription.endDate': { $gte: daysAgo, $lte: new Date() }
       })
     ]);
