@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { auth, premiumAuth } = require('../middleware/auth');
 const { pusherService } = require('../services/pusherService');
 const rateLimit = require('express-rate-limit');
+const mongoose = require('mongoose');
 const router = express.Router();
 
 // Rate limiting for chat operations
@@ -20,8 +21,8 @@ router.post('/:chatId/typing', auth, async (req, res) => {
     
     const chat = await Chat.findOne({
       _id: req.params.chatId,
-      participants: req.user.id,
-      status: 'active'
+      participants: req.user.userId,
+      isActive: true
     });
 
     if (!chat) {
@@ -29,7 +30,7 @@ router.post('/:chatId/typing', auth, async (req, res) => {
     }
 
     // Send typing indicator via Pusher
-    await pusherService.sendTypingIndicator(chat._id, req.user.id, isTyping);
+    await pusherService.sendTypingIndicator(chat._id, req.user.userId, isTyping);
 
     res.json({ success: true });
   } catch (error) {
@@ -48,12 +49,12 @@ const messageRateLimit = rateLimit({
 router.get('/', auth, async (req, res) => {
   try {
     const chats = await Chat.find({
-      participants: req.user.id,
-      status: { $ne: 'deleted' }
+      participants: req.user.userId,
+      isActive: true
     })
-    .populate('participants', 'firstName lastName profilePhoto isOnline lastSeen')
-    .populate('lastMessage.sender', 'firstName lastName')
-    .sort({ updatedAt: -1 });
+      .populate('participants', 'firstName lastName profilePhoto isOnline lastSeen')
+      .populate('lastMessage.sender', 'firstName lastName')
+      .sort({ updatedAt: -1 });
 
     res.json(chats);
   } catch (error) {
@@ -67,19 +68,18 @@ router.get('/:chatId', auth, async (req, res) => {
   try {
     const chat = await Chat.findOne({
       _id: req.params.chatId,
-      participants: req.user.id
+      participants: req.user.userId
     })
-    .populate('participants', 'firstName lastName profilePhoto gender wali')
-    .populate('messages.sender', 'firstName lastName')
-    .populate('waliSupervision.wali', 'firstName lastName email')
-    .populate('waliSupervision.approvedBy', 'firstName lastName');
+      .populate('participants', 'firstName lastName profilePhoto gender wali')
+      .populate('messages.sender', 'firstName lastName profilePhoto gender')
+      .populate('waliSupervision.waliUser', 'firstName lastName email');
 
     if (!chat) {
       return res.status(404).json({ message: 'Chat not found' });
     }
 
     // Check if user can view messages based on wali supervision
-    const canViewMessages = await chat.canUserViewMessages(req.user.id);
+    const canViewMessages = chat.canUserViewMessages(req.user.userId);
     if (!canViewMessages) {
       return res.status(403).json({ 
         message: 'Wali approval required to view messages',
@@ -88,7 +88,7 @@ router.get('/:chatId', auth, async (req, res) => {
     }
 
     // Mark messages as read
-    await chat.markAsRead(req.user.id);
+    await chat.markAsRead(req.user.userId);
 
     res.json(chat);
   } catch (error) {
@@ -106,26 +106,36 @@ router.post('/start', auth, chatRateLimit, async (req, res) => {
       return res.status(400).json({ message: 'Recipient ID is required' });
     }
 
-    if (recipientId === req.user.id) {
+    if (recipientId === String(req.user.userId)) {
       return res.status(400).json({ message: 'Cannot start chat with yourself' });
     }
 
-    // Check if recipient exists and is active
+    // Validate recipient ID
+    if (!mongoose.Types.ObjectId.isValid(recipientId)) {
+      return res.status(400).json({ message: 'Invalid recipient ID' });
+    }
+
     const recipient = await User.findById(recipientId);
     if (!recipient || recipient.accountStatus !== 'active') {
       return res.status(404).json({ message: 'User not found or inactive' });
     }
 
+    const currentUser = await User.findById(req.user.userId);
+
+    if (!currentUser) {
+      return res.status(401).json({ message: 'Current user not found' });
+    }
+
     // Check if users have blocked each other
-    if (req.user.blockedUsers.includes(recipientId) || 
-        recipient.blockedUsers.includes(req.user.id)) {
+    if (currentUser.blockedUsers.some(id => id.equals(recipient._id)) ||
+        recipient.blockedUsers.some(id => id.equals(currentUser._id))) {
       return res.status(403).json({ message: 'Cannot start chat with this user' });
     }
 
     // Check for existing chat
     let chat = await Chat.findOne({
-      participants: { $all: [req.user.id, recipientId] },
-      status: { $ne: 'deleted' }
+      participants: { $all: [req.user.userId, recipient._id] },
+      isActive: true
     });
 
     if (chat) {
@@ -133,8 +143,8 @@ router.post('/start', auth, chatRateLimit, async (req, res) => {
     }
 
     // Create new chat
-    chat = await Chat.createNewChat(req.user.id, recipientId);
-    
+    chat = await Chat.createNewChat(req.user.userId, recipient._id);
+
     await chat.populate('participants', 'firstName lastName profilePhoto gender wali');
 
     res.status(201).json({ chatId: chat._id, existing: false, chat });
@@ -159,41 +169,48 @@ router.post('/:chatId/messages', auth, messageRateLimit, async (req, res) => {
 
     const chat = await Chat.findOne({
       _id: req.params.chatId,
-      participants: req.user.id,
-      status: 'active'
-    });
+      participants: req.user.userId,
+      isActive: true
+    })
+      .populate('participants', 'firstName lastName profilePhoto gender wali')
+      .populate('waliSupervision.waliUser', 'firstName lastName email');
 
     if (!chat) {
       return res.status(404).json({ message: 'Chat not found or inactive' });
     }
 
     // Check if user can send messages
-    const canSend = await chat.canUserSendMessage(req.user.id);
+    const canSend = chat.canUserSendMessage(req.user.userId);
     if (!canSend) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         message: 'Cannot send messages in this chat',
-        requiresWaliApproval: chat.waliSupervision.required && !chat.waliSupervision.approved
+        requiresWaliApproval: chat.waliSupervision.isRequired && !chat.waliSupervision.isApproved
       });
     }
 
     // Add message to chat
-    const message = await chat.addMessage(req.user.id, content, type);
+    const message = await chat.addMessage(req.user.userId, content, type);
 
-    // Populate sender info for response
-    await message.populate('sender', 'firstName lastName');
+    // Ensure sender info is populated for response
+    await chat.populate({
+      path: 'messages.sender',
+      select: 'firstName lastName profilePhoto gender'
+    });
+
+    const populatedMessage = chat.messages.id(message._id);
 
     // Send real-time message via Pusher
-    const recipientId = chat.participants.find(p => p.toString() !== req.user.id);
+    const recipientId = chat.participants.find(p => !p.equals(req.user.userId));
     if (recipientId) {
       const messageData = {
-        ...message.toObject(),
+        ...populatedMessage.toObject(),
         senderName: `${req.user.firstName} ${req.user.lastName}`
       };
-      
+
       await pusherService.sendNewMessage(chat._id, messageData, recipientId);
     }
 
-    res.status(201).json(message);
+    res.status(201).json(populatedMessage);
   } catch (error) {
     console.error('Send message error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -205,14 +222,14 @@ router.post('/:chatId/request-wali-supervision', auth, async (req, res) => {
   try {
     const chat = await Chat.findOne({
       _id: req.params.chatId,
-      participants: req.user.id
+      participants: req.user.userId
     });
 
     if (!chat) {
       return res.status(404).json({ message: 'Chat not found' });
     }
 
-    await chat.requestWaliSupervision(req.user.id);
+    await chat.requestWaliApproval(req.user.userId);
     
     res.json({ message: 'Wali supervision requested successfully' });
   } catch (error) {
@@ -233,14 +250,14 @@ router.post('/:chatId/approve-wali-supervision', auth, async (req, res) => {
 
     // Check if user is a wali for any participant
     const isWali = chat.participants.some(participant => 
-      participant.wali && participant.wali.toString() === req.user.id
+      participant.wali && participant.wali.toString() === String(req.user.userId)
     );
 
     if (!isWali) {
       return res.status(403).json({ message: 'Not authorized to approve this chat' });
     }
 
-    await chat.approveWaliSupervision(req.user.id);
+    await chat.approveByWali(req.user.userId);
     
     res.json({ message: 'Chat approved successfully' });
   } catch (error) {
@@ -254,14 +271,14 @@ router.post('/:chatId/block', auth, async (req, res) => {
   try {
     const chat = await Chat.findOne({
       _id: req.params.chatId,
-      participants: req.user.id
+      participants: req.user.userId
     });
 
     if (!chat) {
       return res.status(404).json({ message: 'Chat not found' });
     }
 
-    await chat.blockChat(req.user.id);
+    await chat.blockChat(req.user.userId);
     
     res.json({ message: 'Chat blocked successfully' });
   } catch (error) {
@@ -281,7 +298,7 @@ router.post('/:chatId/report', auth, async (req, res) => {
 
     const chat = await Chat.findOne({
       _id: req.params.chatId,
-      participants: req.user.id
+      participants: req.user.userId
     });
 
     if (!chat) {
@@ -290,7 +307,7 @@ router.post('/:chatId/report', auth, async (req, res) => {
 
     // Add report
     chat.reports.push({
-      reportedBy: req.user.id,
+      reportedBy: req.user.userId,
       reason,
       description: description || '',
       reportedAt: new Date()
@@ -310,7 +327,7 @@ router.delete('/:chatId', auth, async (req, res) => {
   try {
     const chat = await Chat.findOne({
       _id: req.params.chatId,
-      participants: req.user.id
+      participants: req.user.userId
     });
 
     if (!chat) {
@@ -318,8 +335,10 @@ router.delete('/:chatId', auth, async (req, res) => {
     }
 
     // Add user to deletedFor array
-    if (!chat.deletedFor.includes(req.user.id)) {
-      chat.deletedFor.push(req.user.id);
+    const alreadyDeletedForUser = chat.deletedFor.some(id => id.equals(req.user.userId));
+
+    if (!alreadyDeletedForUser) {
+      chat.deletedFor.push(req.user.userId);
     }
 
     // If both participants have deleted, mark as deleted
@@ -340,12 +359,12 @@ router.delete('/:chatId', auth, async (req, res) => {
 router.get('/wali/supervised', auth, async (req, res) => {
   try {
     const chats = await Chat.find({
-      'waliSupervision.wali': req.user.id,
-      status: { $ne: 'deleted' }
+      'waliSupervision.waliUser': req.user.userId,
+      isActive: true
     })
-    .populate('participants', 'firstName lastName profilePhoto')
-    .populate('lastMessage.sender', 'firstName lastName')
-    .sort({ updatedAt: -1 });
+      .populate('participants', 'firstName lastName profilePhoto')
+      .populate('lastMessage.sender', 'firstName lastName')
+      .sort({ updatedAt: -1 });
 
     res.json(chats);
   } catch (error) {
