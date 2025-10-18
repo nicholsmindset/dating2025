@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
+const { sendPasswordResetEmail } = require('../services/mailerService');
 
 const router = express.Router();
 
@@ -294,10 +295,7 @@ router.post('/logout', auth, async (req, res) => {
 // @route   POST /api/auth/forgot-password
 // @desc    Send password reset email
 // @access  Public
-router.post('/forgot-password', [
-  authLimiter,
-  body('email').isEmail().normalizeEmail()
-], async (req, res) => {
+const forgotPasswordHandler = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -317,7 +315,7 @@ router.post('/forgot-password', [
       });
     }
 
-    // Generate reset token (in production, implement email sending)
+    // Generate reset token and persist it for later validation
     const resetToken = jwt.sign(
       { userId: user._id, purpose: 'password_reset' },
       process.env.JWT_SECRET,
@@ -328,12 +326,15 @@ router.post('/forgot-password', [
     user.resetPasswordExpire = new Date(Date.now() + 3600000); // 1 hour
     await user.save();
 
-    // In production, send email with reset link
-    // For now, return the token (remove in production)
+    await sendPasswordResetEmail({
+      email: user.email,
+      firstName: user.firstName,
+      resetToken
+    });
+
     res.json({
       success: true,
-      message: 'Password reset instructions sent to your email',
-      resetToken // Remove this in production
+      message: 'Password reset instructions sent to your email'
     });
 
   } catch (error) {
@@ -343,7 +344,12 @@ router.post('/forgot-password', [
       message: 'Server error'
     });
   }
-});
+};
+
+router.post('/forgot-password', [
+  authLimiter,
+  body('email').isEmail().normalizeEmail()
+], forgotPasswordHandler);
 
 // @route   POST /api/auth/reset-password
 // @desc    Reset password with token
@@ -408,5 +414,7 @@ router.post('/reset-password', [
     });
   }
 });
+
+router.forgotPasswordHandler = forgotPasswordHandler;
 
 module.exports = router;
