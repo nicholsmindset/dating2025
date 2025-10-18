@@ -204,7 +204,7 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
   profileViews: [{
-    viewedBy: {
+    profileId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
@@ -293,18 +293,60 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 // Reset monthly profile views
 userSchema.methods.resetMonthlyViews = function() {
   const now = new Date();
-  const lastReset = new Date(this.subscription.lastResetDate);
-  
-  if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
+  const lastReset = this.subscription?.lastResetDate ? new Date(this.subscription.lastResetDate) : null;
+  const needsReset = !lastReset ||
+    now.getMonth() !== lastReset.getMonth() ||
+    now.getFullYear() !== lastReset.getFullYear();
+
+  if (needsReset) {
     this.subscription.profileViewsThisMonth = 0;
     this.subscription.lastResetDate = now;
+
+    if (Array.isArray(this.profileViews) && this.profileViews.length > 0) {
+      this.profileViews = this.profileViews.filter(view => {
+        const viewDate = new Date(view.viewedAt);
+        return viewDate.getMonth() === now.getMonth() && viewDate.getFullYear() === now.getFullYear();
+      });
+    }
   }
+
+  return needsReset;
+};
+
+userSchema.methods.recordProfileView = function(targetUserId) {
+  this.resetMonthlyViews();
+
+  const now = new Date();
+  const targetIdString = targetUserId.toString();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const alreadyViewedThisMonth = this.profileViews.some(view => {
+    if (!view.profileId) return false;
+    const viewDate = new Date(view.viewedAt);
+    return view.profileId.toString() === targetIdString &&
+      viewDate.getMonth() === currentMonth &&
+      viewDate.getFullYear() === currentYear;
+  });
+
+  if (alreadyViewedThisMonth) {
+    return { isNewView: false };
+  }
+
+  this.profileViews.push({
+    profileId: targetUserId,
+    viewedAt: now
+  });
+
+  this.subscription.profileViewsThisMonth = (this.subscription.profileViewsThisMonth || 0) + 1;
+
+  return { isNewView: true };
 };
 
 // Check if user can view more profiles
 userSchema.methods.canViewProfile = function(targetUserId) {
   this.resetMonthlyViews();
-  
+
   // Check if trying to view own profile
   if (this._id.toString() === targetUserId) {
     return {

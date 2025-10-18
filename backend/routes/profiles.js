@@ -14,6 +14,23 @@ const profileRateLimit = rateLimit({
 
 router.use(auth, profileRateLimit);
 
+const isPremiumUser = user => user?.subscription?.plan === 'premium';
+
+const saveIfModified = async user => {
+  if (user.isModified()) {
+    await user.save();
+  }
+};
+
+const getViewsRemaining = user => {
+  if (isPremiumUser(user)) {
+    return 'unlimited';
+  }
+
+  const usedViews = user.subscription?.profileViewsThisMonth || 0;
+  return Math.max(0, 10 - usedViews);
+};
+
 // Get user's own profile
 router.get('/me', async (req, res) => {
   try {
@@ -79,62 +96,38 @@ router.put('/me', async (req, res) => {
 router.post('/:userId/view', async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id);
-    
+
     if (!currentUser) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (req.params.userId === req.user.id) {
-      return res.status(400).json({ message: 'Cannot view your own profile' });
-    }
+    const targetUserId = req.params.userId;
+    const viewCheck = currentUser.canViewProfile(targetUserId);
 
-    // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      
-      const monthlyViews = currentUser.profileViews.filter(view => {
-        const viewDate = new Date(view.viewedAt);
-        return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
-      }).length;
+    if (!viewCheck.allowed) {
+      await saveIfModified(currentUser);
 
-      if (monthlyViews >= 10) {
-        return res.status(403).json({ 
-          message: 'Monthly profile view limit reached. Upgrade to premium for unlimited access.',
-          limitReached: true
-        });
-      }
-    }
-
-    // Add to profile views if not already viewed this month
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    const alreadyViewedThisMonth = currentUser.profileViews.some(view => {
-      const viewDate = new Date(view.viewedAt);
-      return view.profileId.toString() === req.params.userId &&
-             viewDate.getMonth() === currentMonth && 
-             viewDate.getFullYear() === currentYear;
-    });
-
-    if (!alreadyViewedThisMonth) {
-      currentUser.profileViews.push({
-        profileId: req.params.userId,
-        viewedAt: new Date()
+      const statusCode = viewCheck.requiresPremium ? 403 : 400;
+      return res.status(statusCode).json({
+        message: viewCheck.reason,
+        limitReached: viewCheck.requiresPremium
       });
-      await currentUser.save();
-      
-      // Send profile view notification via Pusher
+    }
+
+    const { isNewView } = currentUser.recordProfileView(targetUserId);
+    await saveIfModified(currentUser);
+
+    if (isNewView) {
       const viewerInfo = {
         id: currentUser._id,
         firstName: currentUser.firstName,
         lastName: currentUser.lastName,
         profilePhoto: currentUser.profilePhoto
       };
-      await pusherService.sendProfileView(req.params.userId, viewerInfo);
+      await pusherService.sendProfileView(targetUserId, viewerInfo);
     }
 
-    res.json({ success: true, message: 'Profile viewed' });
+    res.json({ success: true, message: 'Profile viewed', alreadyViewed: !isNewView });
   } catch (error) {
     console.error('View profile error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -214,25 +207,25 @@ router.get('/:userId', async (req, res) => {
       return res.status(404).json({ message: 'Current user not found' });
     }
 
-    // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      
-      const monthlyViews = currentUser.profileViews.filter(view => {
-        const viewDate = new Date(view.viewedAt);
-        return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
-      }).length;
+    const targetUserId = req.params.userId;
+    const isSelfView = targetUserId === req.user.id;
 
-      if (monthlyViews >= 10) {
-        return res.status(403).json({ 
-          message: 'Monthly profile view limit reached. Upgrade to premium for unlimited access.',
-          limitReached: true
+    if (!isSelfView) {
+      const viewCheck = currentUser.canViewProfile(targetUserId);
+      if (!viewCheck.allowed) {
+        await saveIfModified(currentUser);
+
+        return res.status(viewCheck.requiresPremium ? 403 : 400).json({
+          message: viewCheck.reason,
+          limitReached: viewCheck.requiresPremium
         });
       }
+    } else {
+      currentUser.resetMonthlyViews();
+      await saveIfModified(currentUser);
     }
 
-    const user = await User.findById(req.params.userId)
+    const user = await User.findById(targetUserId)
       .select('-password -resetPasswordToken -resetPasswordExpires -email -phone -emergencyContact')
       .populate('wali', 'firstName lastName');
 
@@ -241,25 +234,18 @@ router.get('/:userId', async (req, res) => {
     }
 
     // Check if user is blocked
-    if (user.blockedUsers.includes(req.user.id) || currentUser.blockedUsers.includes(req.params.userId)) {
+    if (user.blockedUsers.includes(req.user.id) || currentUser.blockedUsers.includes(targetUserId)) {
       return res.status(403).json({ message: 'Profile not accessible' });
     }
 
-    // Record profile view
-    if (req.params.userId !== req.user.id) {
-      await User.findByIdAndUpdate(req.user.id, {
-        $push: {
-          profileViews: {
-            profileId: req.params.userId,
-            viewedAt: new Date()
-          }
-        }
-      });
+    if (!isSelfView) {
+      currentUser.recordProfileView(targetUserId);
+      await saveIfModified(currentUser);
     }
 
     // Blur images for free users viewing other profiles
     let profileData = user.toObject();
-    if (!currentUser.subscription.isPremium && req.params.userId !== req.user.id) {
+    if (!isPremiumUser(currentUser) && !isSelfView) {
       profileData.imagesBlurred = true;
       // Keep profile photo but mark as blurred
       if (profileData.additionalPhotos) {
@@ -298,23 +284,19 @@ router.get('/', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check monthly view limit for free users
-    if (!currentUser.subscription.isPremium) {
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      
-      const monthlyViews = currentUser.profileViews.filter(view => {
-        const viewDate = new Date(view.viewedAt);
-        return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
-      }).length;
+    const premiumUser = isPremiumUser(currentUser);
+    currentUser.resetMonthlyViews();
 
-      if (monthlyViews >= 10) {
-        return res.status(403).json({ 
-          message: 'Monthly profile view limit reached. Upgrade to premium for unlimited access.',
-          limitReached: true
-        });
-      }
+    if (!premiumUser && (currentUser.subscription?.profileViewsThisMonth || 0) >= 10) {
+      await saveIfModified(currentUser);
+
+      return res.status(403).json({
+        message: 'Monthly profile view limit reached. Upgrade to premium for unlimited access.',
+        limitReached: true
+      });
     }
+
+    await saveIfModified(currentUser);
 
     // Build filter
     const filter = {
@@ -365,7 +347,7 @@ router.get('/', async (req, res) => {
     // Blur images for free users
     let profilesData = users.map(user => {
       let userData = user.toObject();
-      if (!currentUser.subscription.isPremium) {
+      if (!premiumUser) {
         userData.imagesBlurred = true;
       }
       return userData;
@@ -378,12 +360,7 @@ router.get('/', async (req, res) => {
         pages: Math.ceil(total / limit),
         total
       },
-      viewsRemaining: currentUser.subscription.isPremium ? 'unlimited' : Math.max(0, 10 - currentUser.profileViews.filter(view => {
-        const viewDate = new Date(view.viewedAt);
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
-      }).length)
+      viewsRemaining: getViewsRemaining(currentUser)
     });
   } catch (error) {
     console.error('Browse profiles error:', error);
