@@ -57,12 +57,13 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   // Check if user has premium subscription
-  const isPremium = user?.subscription?.plan === 'premium' && 
-                   user?.subscription?.status === 'active';
+  const premiumStatuses = ['active', 'trialing', 'past_due'];
+  const isPremium = user?.subscription?.plan === 'premium' &&
+                   premiumStatuses.includes(user?.subscription?.status);
 
   // Calculate remaining profile views for free users
-  const remainingViews = isPremium ? 'Unlimited' : 
-                        Math.max(0, 10 - (user?.profileViewsThisMonth || 0));
+  const remainingViews = isPremium ? 'Unlimited' :
+                        Math.max(0, 10 - (user?.subscription?.profileViewsThisMonth || 0));
 
   useEffect(() => {
     fetchProfiles();
@@ -117,7 +118,10 @@ const Dashboard = () => {
       // Update user's view count
       const updatedUser = {
         ...user,
-        profileViewsThisMonth: (user.profileViewsThisMonth || 0) + 1
+        subscription: {
+          ...user.subscription,
+          profileViewsThisMonth: (user?.subscription?.profileViewsThisMonth || 0) + 1
+        }
       };
       updateUser(updatedUser);
       
@@ -378,7 +382,7 @@ const Dashboard = () => {
           {!isPremium && (
             <LinearProgress
               variant="determinate"
-              value={(user?.profileViewsThisMonth || 0) / 10 * 100}
+              value={(user?.subscription?.profileViewsThisMonth || 0) / 10 * 100}
               sx={{ mt: 1, height: 6, borderRadius: 3 }}
             />
           )}

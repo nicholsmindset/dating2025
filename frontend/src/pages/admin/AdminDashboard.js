@@ -53,6 +53,11 @@ import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { WithOnlineStatus } from '../../components/OnlineStatus';
 
+const PREMIUM_STATUSES = ['active', 'trialing', 'past_due'];
+const isPremiumSubscription = (subscription) => (
+  subscription?.plan === 'premium' && PREMIUM_STATUSES.includes(subscription?.status)
+);
+
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
@@ -458,8 +463,8 @@ const AdminDashboard = () => {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={user.subscription?.isPremium ? 'Premium' : 'Free'}
-                          color={user.subscription?.isPremium ? 'primary' : 'default'}
+                          label={isPremiumSubscription(user.subscription) ? 'Premium' : 'Free'}
+                          color={isPremiumSubscription(user.subscription) ? 'primary' : 'default'}
                           size="small"
                         />
                       </TableCell>
@@ -717,7 +722,7 @@ const AdminDashboard = () => {
                   <Typography variant="body2"><strong>Gender:</strong> {selectedUser.gender}</Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="body2"><strong>Subscription:</strong> {selectedUser.subscription?.isPremium ? 'Premium' : 'Free'}</Typography>
+                  <Typography variant="body2"><strong>Subscription:</strong> {isPremiumSubscription(selectedUser.subscription) ? 'Premium' : 'Free'}</Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2"><strong>Joined:</strong> {new Date(selectedUser.createdAt).toLocaleDateString()}</Typography>

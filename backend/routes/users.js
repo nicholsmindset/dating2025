@@ -6,6 +6,11 @@ const cloudinary = require('cloudinary').v2;
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
+const PREMIUM_ACCESS_STATUSES = ['active', 'trialing', 'past_due'];
+const hasPremiumAccess = (subscription = {}) => (
+  subscription.plan === 'premium' && PREMIUM_ACCESS_STATUSES.includes(subscription.status)
+);
+
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -196,9 +201,11 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
 
     // Check if user can view more profiles (subscription limits)
     const currentUser = await User.findById(req.user.id);
-    if (!currentUser.subscription.isPremium) {
-      if (currentUser.profileViewsThisMonth >= 10) {
-        return res.status(403).json({ 
+    const isPremium = hasPremiumAccess(currentUser.subscription);
+    const viewsThisMonth = currentUser.subscription?.profileViewsThisMonth || 0;
+    if (!isPremium) {
+      if (viewsThisMonth >= 10) {
+        return res.status(403).json({
           message: 'Monthly profile view limit reached. Upgrade to premium for unlimited views.',
           requiresPremium: true
         });
@@ -245,16 +252,16 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
       .limit(parseInt(limit));
 
     // Increment profile views for non-premium users
-    if (!currentUser.subscription.isPremium) {
+    if (!isPremium) {
       await User.findByIdAndUpdate(req.user.id, {
-        $inc: { profileViewsThisMonth: users.length }
+        $inc: { 'subscription.profileViewsThisMonth': users.length }
       });
     }
 
     // For free users, blur profile photos
     const processedUsers = users.map(user => {
       const userObj = user.toObject();
-      if (!currentUser.subscription.isPremium) {
+      if (!isPremium) {
         userObj.profilePhotoBlurred = true;
       }
       return userObj;
@@ -270,7 +277,7 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
         pages: Math.ceil(total / limit),
         total
       },
-      viewsRemaining: currentUser.subscription.isPremium ? null : (10 - currentUser.profileViewsThisMonth)
+      viewsRemaining: isPremium ? null : (10 - (currentUser.subscription?.profileViewsThisMonth || 0))
     });
   } catch (error) {
     console.error('Browse profiles error:', error);
@@ -282,7 +289,8 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
 router.get('/:userId', auth, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id);
-    
+    const isPremium = hasPremiumAccess(currentUser.subscription);
+
     // Check profile view permissions
     const canView = await currentUser.canViewProfile(req.params.userId);
     if (!canView.allowed) {
@@ -301,15 +309,15 @@ router.get('/:userId', auth, async (req, res) => {
     }
 
     // Increment profile view count for non-premium users
-    if (!currentUser.subscription.isPremium) {
+    if (!isPremium) {
       await User.findByIdAndUpdate(req.user.id, {
-        $inc: { profileViewsThisMonth: 1 }
+        $inc: { 'subscription.profileViewsThisMonth': 1 }
       });
     }
 
     // For free users, blur profile photos
     const userObj = user.toObject();
-    if (!currentUser.subscription.isPremium) {
+    if (!isPremium) {
       userObj.profilePhotoBlurred = true;
     }
 

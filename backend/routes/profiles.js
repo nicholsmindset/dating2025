@@ -5,6 +5,11 @@ const { pusherService } = require('../services/pusherService');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
+const PREMIUM_ACCESS_STATUSES = ['active', 'trialing', 'past_due'];
+const hasPremiumAccess = (subscription = {}) => (
+  subscription.plan === 'premium' && PREMIUM_ACCESS_STATUSES.includes(subscription.status)
+);
+
 // Rate limiting for profile operations
 const profileRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -79,20 +84,22 @@ router.put('/me', async (req, res) => {
 router.post('/:userId/view', async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id);
-    
+
     if (!currentUser) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    const isPremium = hasPremiumAccess(currentUser.subscription);
 
     if (req.params.userId === req.user.id) {
       return res.status(400).json({ message: 'Cannot view your own profile' });
     }
 
     // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
+    if (!isPremium) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
-      
+
       const monthlyViews = currentUser.profileViews.filter(view => {
         const viewDate = new Date(view.viewedAt);
         return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
@@ -214,8 +221,10 @@ router.get('/:userId', async (req, res) => {
       return res.status(404).json({ message: 'Current user not found' });
     }
 
+    const isPremium = hasPremiumAccess(currentUser.subscription);
+
     // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
+    if (!isPremium) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -259,7 +268,7 @@ router.get('/:userId', async (req, res) => {
 
     // Blur images for free users viewing other profiles
     let profileData = user.toObject();
-    if (!currentUser.subscription.isPremium && req.params.userId !== req.user.id) {
+    if (!isPremium && req.params.userId !== req.user.id) {
       profileData.imagesBlurred = true;
       // Keep profile photo but mark as blurred
       if (profileData.additionalPhotos) {
@@ -298,8 +307,10 @@ router.get('/', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const isPremium = hasPremiumAccess(currentUser.subscription);
+
     // Check monthly view limit for free users
-    if (!currentUser.subscription.isPremium) {
+    if (!isPremium) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -365,7 +376,7 @@ router.get('/', async (req, res) => {
     // Blur images for free users
     let profilesData = users.map(user => {
       let userData = user.toObject();
-      if (!currentUser.subscription.isPremium) {
+      if (!isPremium) {
         userData.imagesBlurred = true;
       }
       return userData;
@@ -378,7 +389,7 @@ router.get('/', async (req, res) => {
         pages: Math.ceil(total / limit),
         total
       },
-      viewsRemaining: currentUser.subscription.isPremium ? 'unlimited' : Math.max(0, 10 - currentUser.profileViews.filter(view => {
+      viewsRemaining: isPremium ? 'unlimited' : Math.max(0, 10 - currentUser.profileViews.filter(view => {
         const viewDate = new Date(view.viewedAt);
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
