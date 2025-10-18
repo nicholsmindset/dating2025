@@ -16,6 +16,7 @@ const AUTH_ACTIONS = {
   REGISTER_FAILURE: 'REGISTER_FAILURE',
   LOAD_USER: 'LOAD_USER',
   UPDATE_USER: 'UPDATE_USER',
+  UPDATE_SUBSCRIPTION: 'UPDATE_SUBSCRIPTION',
   CLEAR_ERRORS: 'CLEAR_ERRORS'
 };
 
@@ -86,6 +87,19 @@ const authReducer = (state, action) => {
       return {
         ...state,
         user: { ...state.user, ...action.payload },
+        loading: false
+      };
+
+    case AUTH_ACTIONS.UPDATE_SUBSCRIPTION:
+      return {
+        ...state,
+        user: {
+          ...state.user,
+          subscription: {
+            ...state.user?.subscription,
+            ...action.payload
+          }
+        },
         loading: false
       };
     
@@ -266,8 +280,14 @@ export const AuthProvider = ({ children }) => {
 
   // Check if user has premium subscription
   const isPremiumUser = () => {
-    return state.user?.subscription?.plan === 'premium' && 
-           (!state.user?.subscription?.endDate || new Date() < new Date(state.user.subscription.endDate));
+    if (!state.user?.subscription) return false;
+
+    const { plan, status, endDate, isPremium } = state.user.subscription;
+    const hasPremiumPlan = plan === 'premium' || isPremium === true;
+    const isActive = status ? status === 'active' : true;
+    const withinPeriod = !endDate || new Date() < new Date(endDate);
+
+    return hasPremiumPlan && isActive && withinPeriod;
   };
 
   // Check if user can view more profiles
@@ -276,22 +296,53 @@ export const AuthProvider = ({ children }) => {
     
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    const lastResetDate = new Date(state.user?.subscription?.lastResetDate || 0);
-    
-    // Reset count if it's a new month
+    const lastResetDate = state.user?.subscription?.lastResetDate
+      ? new Date(state.user.subscription.lastResetDate)
+      : null;
+
+    if (!lastResetDate) return true;
+
     if (lastResetDate.getMonth() !== currentMonth || lastResetDate.getFullYear() !== currentYear) {
-      return true; // Will be reset on backend
+      return true; // Backend will reset
     }
-    
+
     return (state.user?.subscription?.profileViewsThisMonth || 0) < 10;
   };
 
   // Get remaining profile views for free users
   const getRemainingViews = () => {
     if (isPremiumUser()) return 'Unlimited';
-    
+
     const viewsUsed = state.user?.subscription?.profileViewsThisMonth || 0;
     return Math.max(0, 10 - viewsUsed);
+  };
+
+  const updateSubscriptionData = (updates) => {
+    if (!updates) return;
+
+    dispatch({
+      type: AUTH_ACTIONS.UPDATE_SUBSCRIPTION,
+      payload: updates
+    });
+  };
+
+  const refreshProfileViewStatus = async () => {
+    try {
+      const response = await axios.get('/api/users/profile-views/status');
+      if (response.data?.success) {
+        updateSubscriptionData({
+          profileViewsThisMonth: response.data.viewsUsed,
+          lastResetDate: response.data.lastResetDate,
+          plan: state.user?.subscription?.plan,
+          status: state.user?.subscription?.status,
+          isPremium: response.data.isPremium
+        });
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Failed to refresh profile view status:', error);
+      throw error;
+    }
   };
 
   // Check if user is admin
@@ -323,6 +374,8 @@ export const AuthProvider = ({ children }) => {
     isPremiumUser,
     canViewProfiles,
     getRemainingViews,
+    refreshProfileViewStatus,
+    updateSubscriptionData,
     isAdmin
   };
 

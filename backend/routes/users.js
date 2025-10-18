@@ -62,22 +62,59 @@ router.get('/liked-profiles', auth, async (req, res) => {
 // Get viewed profiles
 router.get('/viewed-profiles', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('profileViews');
-    
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId).select('profileViews');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    
-    const viewedThisMonth = user.profileViews.filter(view => {
+
+    const viewedThisMonth = (user?.profileViews || []).filter(view => {
       const viewDate = new Date(view.viewedAt);
       return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
     }).map(view => view.profileId);
-    
+
     res.json({
       success: true,
       viewedProfiles: viewedThisMonth
     });
   } catch (error) {
     console.error('Get viewed profiles error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get profile view status
+router.get('/profile-views/status', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const resetOccurred = user.resetMonthlyViews();
+    if (resetOccurred) {
+      await user.save();
+    }
+
+    const isPremium = user.isPremium();
+    const viewsUsed = user.subscription?.profileViewsThisMonth || 0;
+    const remaining = isPremium ? null : Math.max(0, user.getMonthlyViewLimit() - viewsUsed);
+
+    res.json({
+      success: true,
+      isPremium,
+      viewsUsed,
+      viewsRemaining: isPremium ? null : remaining,
+      lastResetDate: user.subscription?.lastResetDate
+    });
+  } catch (error) {
+    console.error('Get profile view status error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -195,19 +232,32 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
     } = req.query;
 
     // Check if user can view more profiles (subscription limits)
-    const currentUser = await User.findById(req.user.id);
-    if (!currentUser.subscription.isPremium) {
-      if (currentUser.profileViewsThisMonth >= 10) {
-        return res.status(403).json({ 
-          message: 'Monthly profile view limit reached. Upgrade to premium for unlimited views.',
-          requiresPremium: true
-        });
-      }
+    const requesterId = req.user.userId || req.user.id;
+    const currentUser = await User.findById(requesterId);
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const resetOccurred = currentUser.resetMonthlyViews();
+    const isPremium = currentUser.isPremium();
+    const remainingViews = isPremium
+      ? null
+      : Math.max(0, currentUser.getMonthlyViewLimit() - (currentUser.subscription?.profileViewsThisMonth || 0));
+
+    if (resetOccurred) {
+      await currentUser.save();
+    }
+
+    if (!isPremium && remainingViews <= 0) {
+      return res.status(403).json({
+        message: 'Monthly profile view limit reached. Upgrade to premium for unlimited views.',
+        requiresPremium: true
+      });
     }
 
     // Build filter query
     const filter = {
-      _id: { $ne: req.user.id }, // Exclude current user
+      _id: { $ne: requesterId }, // Exclude current user
       accountStatus: 'active',
       gender: currentUser.gender === 'male' ? 'female' : 'male' // Opposite gender
     };
@@ -244,17 +294,10 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Increment profile views for non-premium users
-    if (!currentUser.subscription.isPremium) {
-      await User.findByIdAndUpdate(req.user.id, {
-        $inc: { profileViewsThisMonth: users.length }
-      });
-    }
-
     // For free users, blur profile photos
     const processedUsers = users.map(user => {
       const userObj = user.toObject();
-      if (!currentUser.subscription.isPremium) {
+      if (!isPremium) {
         userObj.profilePhotoBlurred = true;
       }
       return userObj;
@@ -270,7 +313,7 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
         pages: Math.ceil(total / limit),
         total
       },
-      viewsRemaining: currentUser.subscription.isPremium ? null : (10 - currentUser.profileViewsThisMonth)
+      viewsRemaining: remainingViews
     });
   } catch (error) {
     console.error('Browse profiles error:', error);
@@ -281,12 +324,17 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
 // Get specific user profile
 router.get('/:userId', auth, async (req, res) => {
   try {
-    const currentUser = await User.findById(req.user.id);
-    
+    const currentUserId = req.user.userId || req.user.id;
+    const currentUser = await User.findById(currentUserId);
+
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     // Check profile view permissions
-    const canView = await currentUser.canViewProfile(req.params.userId);
+    const canView = currentUser.canViewProfile(req.params.userId);
     if (!canView.allowed) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         message: canView.reason,
         requiresPremium: canView.requiresPremium
       });
@@ -300,16 +348,9 @@ router.get('/:userId', auth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Increment profile view count for non-premium users
-    if (!currentUser.subscription.isPremium) {
-      await User.findByIdAndUpdate(req.user.id, {
-        $inc: { profileViewsThisMonth: 1 }
-      });
-    }
-
     // For free users, blur profile photos
     const userObj = user.toObject();
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       userObj.profilePhotoBlurred = true;
     }
 

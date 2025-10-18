@@ -132,18 +132,19 @@ class PaymentService {
       const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
       user.subscription = {
-        type: 'premium',
+        ...user.subscription,
+        plan: 'premium',
+        isPremium: true,
         status: 'active',
         startDate: now,
         endDate: expiryDate,
         stripeSubscriptionId: paymentIntent.id,
+        stripeCustomerId: paymentIntent.customer,
         amount: paymentIntent.amount / 100, // Convert from cents
-        currency: paymentIntent.currency
+        currency: paymentIntent.currency,
+        profileViewsThisMonth: 0,
+        lastResetDate: now
       };
-
-      // Reset monthly profile views for premium users
-      user.profileViewsThisMonth = 0;
-      user.lastProfileViewReset = now;
 
       await user.save();
 
@@ -172,6 +173,7 @@ class PaymentService {
 
       // Update user record
       user.subscription.status = 'cancelled';
+      user.subscription.isPremium = false;
       user.subscription.cancelledAt = new Date();
       await user.save();
 
@@ -200,6 +202,7 @@ class PaymentService {
 
       // Update user record
       user.subscription.status = 'active';
+      user.subscription.isPremium = true;
       user.subscription.cancelledAt = null;
       await user.save();
 
@@ -222,7 +225,7 @@ class PaymentService {
         return {
           type: 'free',
           status: 'inactive',
-          profileViewsRemaining: Math.max(0, 10 - (user.profileViewsThisMonth || 0))
+          profileViewsRemaining: Math.max(0, 10 - (user.subscription?.profileViewsThisMonth || 0))
         };
       }
 
@@ -231,7 +234,7 @@ class PaymentService {
       );
 
       return {
-        type: user.subscription.type,
+        type: user.subscription.plan,
         status: subscription.status,
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),

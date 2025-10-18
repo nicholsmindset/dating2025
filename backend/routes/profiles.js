@@ -78,53 +78,32 @@ router.put('/me', async (req, res) => {
 // View a profile
 router.post('/:userId/view', async (req, res) => {
   try {
-    const currentUser = await User.findById(req.user.id);
-    
+    const currentUserId = req.user.userId || req.user.id;
+    const currentUser = await User.findById(currentUserId);
+
     if (!currentUser) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (req.params.userId === req.user.id) {
+    if (req.params.userId === currentUserId.toString()) {
       return res.status(400).json({ message: 'Cannot view your own profile' });
     }
 
-    // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      
-      const monthlyViews = currentUser.profileViews.filter(view => {
-        const viewDate = new Date(view.viewedAt);
-        return viewDate.getMonth() === currentMonth && viewDate.getFullYear() === currentYear;
-      }).length;
-
-      if (monthlyViews >= 10) {
-        return res.status(403).json({ 
-          message: 'Monthly profile view limit reached. Upgrade to premium for unlimited access.',
-          limitReached: true
-        });
-      }
+    const permission = currentUser.canViewProfile(req.params.userId);
+    if (!permission.allowed) {
+      return res.status(403).json({
+        message: permission.reason,
+        limitReached: permission.requiresPremium,
+        requiresPremium: permission.requiresPremium
+      });
     }
 
-    // Add to profile views if not already viewed this month
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    const alreadyViewedThisMonth = currentUser.profileViews.some(view => {
-      const viewDate = new Date(view.viewedAt);
-      return view.profileId.toString() === req.params.userId &&
-             viewDate.getMonth() === currentMonth && 
-             viewDate.getFullYear() === currentYear;
-    });
-
-    if (!alreadyViewedThisMonth) {
-      currentUser.profileViews.push({
-        profileId: req.params.userId,
-        viewedAt: new Date()
-      });
+    const recordResult = currentUser.recordProfileView(req.params.userId);
+    if (permission.resetOccurred || !recordResult.alreadyViewed) {
       await currentUser.save();
-      
-      // Send profile view notification via Pusher
+    }
+
+    if (!recordResult.alreadyViewed) {
       const viewerInfo = {
         id: currentUser._id,
         firstName: currentUser.firstName,
@@ -134,7 +113,17 @@ router.post('/:userId/view', async (req, res) => {
       await pusherService.sendProfileView(req.params.userId, viewerInfo);
     }
 
-    res.json({ success: true, message: 'Profile viewed' });
+    const isPremium = currentUser.isPremium();
+    const viewsRemaining = isPremium
+      ? null
+      : Math.max(0, currentUser.getMonthlyViewLimit() - (currentUser.subscription?.profileViewsThisMonth || 0));
+
+    res.json({
+      success: true,
+      message: 'Profile viewed',
+      alreadyViewed: recordResult.alreadyViewed,
+      viewsRemaining
+    });
   } catch (error) {
     console.error('View profile error:', error);
     res.status(500).json({ message: 'Server error' });
