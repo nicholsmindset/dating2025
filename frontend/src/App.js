@@ -8,6 +8,7 @@ import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { PusherProvider } from './contexts/PusherContext';
 import { WaliProvider } from './contexts/WaliContext';
+import { SearchProvider } from './contexts/SearchContext';
 
 // Components
 import Navbar from './components/layout/Navbar';
@@ -33,18 +34,23 @@ import WaliLogin from './pages/wali/WaliLogin';
 import WaliDashboard from './pages/wali/WaliDashboard';
 import WaliVerifyEmail from './pages/wali/WaliVerifyEmail';
 
+// Search Pages
+import AdvancedSearch from './pages/search/AdvancedSearch';
+import SavedSearches from './pages/search/SavedSearches';
+
 
 
 function App() {
   return (
     <WaliProvider>
       <SubscriptionProvider>
-        <ChatProvider>
-          <PusherProvider>
-                <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-                  <Navbar />
-                
-                <main style={{ flex: 1, paddingTop: '80px' }}>
+        <SearchProvider>
+          <ChatProvider>
+            <PusherProvider>
+                  <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+                    <Navbar />
+
+                  <main style={{ flex: 1, paddingTop: '80px' }}>
                   <Routes>
                     {/* Public Routes */}
                     <Route path="/" element={<Home />} />
@@ -83,7 +89,20 @@ function App() {
                         <Subscription />
                       </ProtectedRoute>
                     } />
-                    
+
+                    {/* Search Routes */}
+                    <Route path="/search" element={
+                      <ProtectedRoute>
+                        <AdvancedSearch />
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/saved-searches" element={
+                      <ProtectedRoute>
+                        <SavedSearches />
+                      </ProtectedRoute>
+                    } />
+
                     {/* Admin Routes */}
                     <Route path="/admin/*" element={
                       <ProtectedRoute requireAdmin={true}>
@@ -102,24 +121,25 @@ function App() {
                   </Routes>
                 </main>
                 
-                <Footer />
-                
-                {/* Toast notifications */}
-                <ToastContainer
-                  position="top-right"
-                  autoClose={5000}
-                  hideProgressBar={false}
-                  newestOnTop={false}
-                  closeOnClick
-                  rtl={false}
-                  pauseOnFocusLoss
-                  draggable
-                  pauseOnHover
-                  theme="light"
-                />
-                </div>
-          </PusherProvider>
-        </ChatProvider>
+                  <Footer />
+
+                  {/* Toast notifications */}
+                  <ToastContainer
+                    position="top-right"
+                    autoClose={5000}
+                    hideProgressBar={false}
+                    newestOnTop={false}
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    draggable
+                    pauseOnHover
+                    theme="light"
+                  />
+                  </div>
+            </PusherProvider>
+          </ChatProvider>
+        </SearchProvider>
       </SubscriptionProvider>
     </WaliProvider>
   );
