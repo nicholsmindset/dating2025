@@ -13,7 +13,7 @@ class PaymentService {
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: 'sgd',
-        customer: user.stripeCustomerId,
+        customer: user.subscription.stripeCustomerId,
         metadata: {
           userId: userId.toString(),
           subscriptionType: 'premium',
@@ -37,9 +37,9 @@ class PaymentService {
         throw new Error('User not found');
       }
 
-      if (user.stripeCustomerId) {
+      if (user.subscription.stripeCustomerId) {
         // Retrieve existing customer
-        const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+        const customer = await stripe.customers.retrieve(user.subscription.stripeCustomerId);
         return customer;
       }
 
@@ -53,7 +53,7 @@ class PaymentService {
       });
 
       // Save customer ID to user
-      user.stripeCustomerId = customer.id;
+      user.subscription.stripeCustomerId = customer.id;
       await user.save();
 
       return customer;

@@ -283,7 +283,7 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
   profileViews: [{
-    viewedBy: {
+    profileId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },

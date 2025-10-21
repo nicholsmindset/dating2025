@@ -4,7 +4,7 @@ const VirtualGift = require('../../models/VirtualGift');
 const Purchase = require('../../models/Purchase');
 const User = require('../../models/User');
 const { auth } = require('../../middleware/auth');
-const { sendPusherNotification } = require('../../services/pusherService');
+const { pusherService } = require('../../services/pusherService');
 
 const router = express.Router();
 
@@ -207,7 +207,7 @@ router.post('/confirm/:purchaseId', auth, async (req, res) => {
       ]);
 
       if (recipient && gift) {
-        await sendPusherNotification(purchase.recipient.toString(), 'gift_received', {
+        await pusherService.sendGiftNotification(purchase.recipient.toString(), 'gift_received', {
           sender: {
             id: sender._id,
             name: `${sender.firstName} ${sender.lastName}`,
@@ -217,8 +217,7 @@ router.post('/confirm/:purchaseId', auth, async (req, res) => {
             name: gift.displayName,
             icon: gift.icon
           },
-          message: purchase.giftMessage,
-          timestamp: new Date()
+          message: purchase.giftMessage
         });
       }
 

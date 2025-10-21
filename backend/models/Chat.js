@@ -228,11 +228,13 @@ chatSchema.methods.canUserSendMessage = function(userId) {
   // Check if chat is blocked
   if (this.isBlocked) return false;
 
-  // Check if user is participant
-  if (!this.participants.includes(userId)) return false;
+  // Check if user is participant (convert to string for comparison)
+  const userIdStr = userId.toString();
+  const isParticipant = this.participants.some(p => p.toString() === userIdStr);
+  if (!isParticipant) return false;
 
   // Check wali approval if required
-  if (this.waliSupervision.isRequired && !this.waliSupervision.isApproved) {
+  if (this.waliSupervision && this.waliSupervision.isRequired && !this.waliSupervision.isApproved) {
     return false;
   }
 
@@ -248,7 +250,8 @@ chatSchema.methods.canUserViewMessages = function(userId) {
   const isParticipant = this.participants.some(p => p.toString() === userIdStr);
   if (!isParticipant) {
     // Check if user is the wali
-    if (this.waliSupervision.waliUser &&
+    if (this.waliSupervision &&
+        this.waliSupervision.waliUser &&
         this.waliSupervision.waliUser.toString() === userIdStr &&
         this.waliSupervision.waliCanView) {
       return true;

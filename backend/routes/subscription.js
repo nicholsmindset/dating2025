@@ -280,9 +280,15 @@ async function simulatePayment(paymentMethod, amount) {
 // Check expired subscriptions (cron job endpoint)
 router.post('/check-expired', async (req, res) => {
   try {
-    // This should be called by a cron job, not directly by users
-    // Add authentication for cron jobs in production
-    
+    // Verify cron job authentication token
+    const cronSecret = req.headers['x-cron-secret'];
+    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized - Invalid cron secret'
+      });
+    }
+
     const expiredUsers = await User.find({
       'subscription.status': 'active',
       'subscription.endDate': { $lt: new Date() }
@@ -290,17 +296,21 @@ router.post('/check-expired', async (req, res) => {
 
     for (const user of expiredUsers) {
       user.subscription.status = 'expired';
-      user.subscription.type = 'free';
+      user.subscription.plan = 'free';
       await user.save();
     }
 
-    res.json({ 
+    res.json({
+      success: true,
       message: `Processed ${expiredUsers.length} expired subscriptions`,
       count: expiredUsers.length
     });
   } catch (error) {
     console.error('Check expired subscriptions error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 });
 

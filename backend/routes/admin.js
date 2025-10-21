@@ -443,7 +443,7 @@ router.post('/create-admin', async (req, res) => {
       isEmailVerified: true,
       gender: 'male', // Default, can be changed
       dateOfBirth: new Date('1990-01-01'), // Default
-      maritalStatus: 'single' // Default
+      maritalStatus: 'never_married' // Default
     });
 
     await adminUser.save();
