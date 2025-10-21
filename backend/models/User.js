@@ -147,8 +147,13 @@ const userSchema = new mongoose.Schema({
   subscription: {
     plan: {
       type: String,
-      enum: ['free', 'premium'],
+      enum: ['free', 'basic', 'premium', 'vip'],
       default: 'free'
+    },
+    billingCycle: {
+      type: String,
+      enum: ['monthly', 'annual'],
+      default: 'monthly'
     },
     startDate: Date,
     endDate: Date,
@@ -161,8 +166,82 @@ const userSchema = new mongoose.Schema({
     lastResetDate: {
       type: Date,
       default: Date.now
+    },
+    // Usage tracking for premium features
+    superLikesRemaining: {
+      type: Number,
+      default: 0
+    },
+    boostsRemaining: {
+      type: Number,
+      default: 0
+    },
+    lastMonthlyReset: Date
+  },
+
+  // Profile Verification
+  verification: {
+    isVerified: {
+      type: Boolean,
+      default: false
+    },
+    verificationMethod: {
+      type: String,
+      enum: ['photo', 'id', 'phone', 'email', 'manual'],
+      default: null
+    },
+    verifiedAt: Date,
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    verificationBadgeActive: {
+      type: Boolean,
+      default: false
     }
   },
+
+  // Profile Completion
+  profileCompletion: {
+    percentage: {
+      type: Number,
+      default: 0
+    },
+    missingFields: [String],
+    lastCalculated: Date
+  },
+
+  // Compatibility Quiz
+  hasCompletedQuiz: {
+    type: Boolean,
+    default: false
+  },
+
+  // Today's Top Picks tracking
+  topPicks: {
+    lastGenerated: Date,
+    generatedFor: Date, // The date these picks are for
+    picks: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }]
+  },
+
+  // Who Liked Me (premium feature)
+  likedBy: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    likedAt: {
+      type: Date,
+      default: Date.now
+    },
+    isSeen: {
+      type: Boolean,
+      default: false
+    }
+  }],
   
   // Account Status
   accountStatus: {
@@ -345,13 +424,151 @@ userSchema.virtual('age').get(function() {
   const birthDate = new Date(this.dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-  
+
   return age;
 });
+
+// Calculate profile completion percentage
+userSchema.methods.calculateProfileCompletion = function() {
+  const requiredFields = [
+    'firstName',
+    'lastName',
+    'email',
+    'dateOfBirth',
+    'gender',
+    'maritalStatus',
+    'religiousLevel',
+    'prayerFrequency',
+    'location.country',
+    'location.city'
+  ];
+
+  const optionalFields = [
+    'bio',
+    'occupation',
+    'education',
+    'height',
+    'ethnicity',
+    'languages',
+    'profilePhoto',
+    'wali.hasWali'
+  ];
+
+  const bonusFields = [
+    'partnerPreferences.ageRange.min',
+    'partnerPreferences.ageRange.max',
+    'partnerPreferences.religiousLevel',
+    'hasCompletedQuiz'
+  ];
+
+  let score = 0;
+  let totalPossible = 100;
+  const missing = [];
+
+  // Required fields: 40 points
+  const requiredWeight = 40 / requiredFields.length;
+  requiredFields.forEach((field) => {
+    const value = field.split('.').reduce((obj, key) => obj?.[key], this);
+    if (value) {
+      score += requiredWeight;
+    } else {
+      missing.push(field);
+    }
+  });
+
+  // Optional fields: 40 points
+  const optionalWeight = 40 / optionalFields.length;
+  optionalFields.forEach((field) => {
+    const value = field.split('.').reduce((obj, key) => obj?.[key], this);
+    if (value) {
+      score += optionalWeight;
+    } else {
+      missing.push(field);
+    }
+  });
+
+  // Bonus fields: 20 points
+  const bonusWeight = 20 / bonusFields.length;
+  bonusFields.forEach((field) => {
+    const value = field.split('.').reduce((obj, key) => obj?.[key], this);
+    if (value) {
+      score += bonusWeight;
+    } else {
+      missing.push(field);
+    }
+  });
+
+  // Photos: +5 points per photo (up to 3)
+  if (this.profileImages && this.profileImages.length > 0) {
+    score += Math.min(this.profileImages.length * 5, 15);
+  }
+
+  this.profileCompletion = {
+    percentage: Math.round(Math.min(score, 100)),
+    missingFields: missing,
+    lastCalculated: new Date()
+  };
+
+  return this.profileCompletion.percentage;
+};
+
+// Check if user has active premium subscription
+userSchema.methods.isPremium = function() {
+  return ['basic', 'premium', 'vip'].includes(this.subscription.plan) &&
+         (!this.subscription.endDate || new Date() < new Date(this.subscription.endDate));
+};
+
+// Get subscription tier
+userSchema.methods.getSubscriptionTier = function() {
+  if (this.isPremium()) {
+    return this.subscription.plan;
+  }
+  return 'free';
+};
+
+// Reset monthly limits (super likes, boosts, etc.)
+userSchema.methods.resetMonthlyLimits = async function() {
+  const SubscriptionPlan = mongoose.model('SubscriptionPlan');
+  const plan = await SubscriptionPlan.findOne({ name: this.subscription.plan });
+
+  if (plan) {
+    this.subscription.superLikesRemaining = plan.features.superLikesPerMonth || 0;
+    this.subscription.boostsRemaining = plan.features.profileBoostPerMonth || 0;
+    this.subscription.profileViewsThisMonth = 0;
+    this.subscription.lastMonthlyReset = new Date();
+    await this.save();
+  }
+};
+
+// Check if user can use feature
+userSchema.methods.canUseFeature = async function(featureName) {
+  const SubscriptionPlan = mongoose.model('SubscriptionPlan');
+  const plan = await SubscriptionPlan.findOne({ name: this.subscription.plan });
+
+  if (!plan) {
+    return false;
+  }
+
+  // Map feature names to plan features
+  const featureMap = {
+    'see_who_liked_you': 'canSeeWhoLikedYou',
+    'read_receipts': 'readReceipts',
+    'undo_swipes': 'undoSwipes',
+    'advanced_filters': 'advancedFilters',
+    'video_introduction': 'videoIntroduction',
+    'voice_messages': 'voiceMessages',
+    'profile_analytics': 'profileAnalytics',
+    'send_gifts': 'canSendVirtualGifts',
+    'verification_badge': 'verificationBadge'
+  };
+
+  const planFeature = featureMap[featureName];
+  return planFeature ? plan.features[planFeature] : false;
+};
 
 // Ensure virtual fields are serialized
 userSchema.set('toJSON', { virtuals: true });

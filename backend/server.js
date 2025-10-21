@@ -44,7 +44,16 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/islamic-d
 .then(() => console.log('MongoDB connected successfully'))
 .catch(err => console.error('MongoDB connection error:', err));
 
-// Routes
+// API V1 Routes (New Enhanced Features)
+app.use('/api/v1/subscription-plans', require('./routes/v1/subscriptionPlans'));
+app.use('/api/v1/purchases', require('./routes/v1/purchases'));
+app.use('/api/v1/virtual-gifts', require('./routes/v1/virtualGifts'));
+app.use('/api/v1/matching', require('./routes/v1/matching'));
+app.use('/api/v1/compatibility', require('./routes/v1/compatibility'));
+app.use('/api/v1/profile', require('./routes/v1/profile'));
+app.use('/api/v1/icebreakers', require('./routes/v1/icebreakers'));
+
+// Legacy Routes (Backward Compatibility)
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/profiles', require('./routes/profiles'));
