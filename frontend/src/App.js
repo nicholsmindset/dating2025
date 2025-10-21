@@ -17,6 +17,8 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import VerifyEmail from './pages/auth/VerifyEmail';
+import ResendVerification from './pages/auth/ResendVerification';
 import Onboarding from './pages/onboarding/Onboarding';
 import Dashboard from './pages/dashboard/Dashboard';
 import Profile from './pages/profile/Profile';
@@ -41,7 +43,9 @@ function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
-                    
+                    <Route path="/verify-email" element={<VerifyEmail />} />
+                    <Route path="/resend-verification" element={<ResendVerification />} />
+
                     {/* Protected Routes */}
                     <Route path="/onboarding" element={
                       <ProtectedRoute>

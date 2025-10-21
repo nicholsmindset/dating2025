@@ -193,7 +193,15 @@ const Register = () => {
 
       const result = await register(userData);
       if (result.success) {
-        navigate('/onboarding');
+        // Check if email verification is required
+        if (result.requiresVerification) {
+          // Show success message and stay on page - user will get email
+          // The error state in useAuth will show the message
+          // User can click "Resend Verification" link if needed
+        } else {
+          // If no verification required (old flow), navigate to onboarding
+          navigate('/onboarding');
+        }
       }
     }
   });

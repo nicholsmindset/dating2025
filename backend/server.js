@@ -48,6 +48,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/islamic-d
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/profiles', require('./routes/profiles'));
+app.use('/api/matches', require('./routes/matches'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/admin', require('./routes/admin'));
