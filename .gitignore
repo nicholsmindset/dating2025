@@ -175,6 +175,13 @@ dist
 .cache/
 public
 
+# But keep PWA files in frontend/public
+!frontend/public/
+!frontend/public/manifest.json
+!frontend/public/service-worker.js
+!frontend/public/*.png
+!frontend/public/index.html
+
 # Storybook build outputs
 .out
 .storybook-out
