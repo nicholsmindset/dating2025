@@ -86,7 +86,7 @@ const Register = () => {
     
     // Islamic Profile
     maritalStatus: Yup.string()
-      .oneOf(['widow', 'divorced', 'separated'], 'Please select your marital status')
+      .oneOf(['never_married', 'widow', 'divorced', 'separated'], 'Please select your marital status')
       .required('Marital status is required'),
     religiousLevel: Yup.string()
       .oneOf(['practicing', 'moderate', 'learning'], 'Please select your religious level')
@@ -407,6 +407,7 @@ const Register = () => {
                   onBlur={formik.handleBlur}
                   label="Marital Status"
                 >
+                  <MenuItem value="never_married">Never Married</MenuItem>
                   <MenuItem value="widow">Widow</MenuItem>
                   <MenuItem value="divorced">Divorced</MenuItem>
                   <MenuItem value="separated">Separated</MenuItem>

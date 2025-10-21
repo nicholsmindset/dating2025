@@ -63,10 +63,8 @@ const generateUserData = (index) => {
     location: {
       country: faker.address.country(),
       city: faker.address.city(),
-      coordinates: {
-        lat: parseFloat(faker.address.latitude()),
-        lng: parseFloat(faker.address.longitude())
-      }
+      latitude: parseFloat(faker.address.latitude()),
+      longitude: parseFloat(faker.address.longitude())
     },
     bio: faker.lorem.paragraph(),
     occupation: faker.name.jobTitle(),
@@ -81,7 +79,7 @@ const generateUserData = (index) => {
     wali: gender === 'female' ? {
       hasWali: true,
       waliName: faker.name.firstName('male') + ' ' + faker.name.lastName(),
-      waliRelation: faker.random.arrayElement(['father', 'brother', 'uncle', 'guardian']),
+      waliRelation: faker.random.arrayElement(['father', 'brother', 'uncle', 'other']),
       waliContact: faker.phone.phoneNumber(),
       waliEmail: `wali${index}@example.com`
     } : { hasWali: false },
