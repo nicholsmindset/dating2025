@@ -22,7 +22,8 @@ import {
   Badge,
   Tooltip,
   Paper,
-  Divider
+  Divider,
+  CircularProgress
 } from '@mui/material';
 import {
   Favorite,
@@ -53,6 +54,7 @@ const Dashboard = () => {
   const [likedProfiles, setLikedProfiles] = useState([]);
   const [viewedProfiles, setViewedProfiles] = useState([]);
   const [subscriptionDialog, setSubscriptionDialog] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
 
@@ -155,12 +157,28 @@ const Dashboard = () => {
       const response = await axios.post('/api/chat/start', {
         recipientId: profileId
       });
-      
+
       if (response.data.chatId) {
         navigate(`/chat/${response.data.chatId}`);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to start chat');
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      setPortalLoading(true);
+      const response = await axios.post('/api/subscription/create-portal-session');
+
+      if (response.data.success && response.data.url) {
+        // Open Stripe Customer Portal in new window
+        window.open(response.data.url, '_blank');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to open billing portal');
+    } finally {
+      setPortalLoading(false);
     }
   };
 
@@ -356,25 +374,42 @@ const Dashboard = () => {
                 {isPremium ? '✨ Premium Member' : '🆓 Free Plan'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {isPremium 
+                {isPremium
                   ? 'Unlimited profile views and full access'
                   : `${remainingViews} profile views remaining this month`
                 }
               </Typography>
+              {isPremium && user?.subscription?.endDate && (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  Renews on {new Date(user.subscription.endDate).toLocaleDateString()}
+                </Typography>
+              )}
             </Box>
-            
-            {!isPremium && (
-              <Button
-                variant="contained"
-                color="warning"
-                onClick={() => navigate('/subscription')}
-                sx={{ ml: 2 }}
-              >
-                Upgrade to Premium
-              </Button>
-            )}
+
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {!isPremium && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  onClick={() => navigate('/subscription')}
+                >
+                  Upgrade to Premium
+                </Button>
+              )}
+              {isPremium && user?.subscription?.stripeCustomerId && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={handleManageSubscription}
+                  disabled={portalLoading}
+                  startIcon={portalLoading ? <CircularProgress size={16} /> : null}
+                >
+                  {portalLoading ? 'Loading...' : 'Manage Subscription'}
+                </Button>
+              )}
+            </Box>
           </Box>
-          
+
           {!isPremium && (
             <LinearProgress
               variant="determinate"

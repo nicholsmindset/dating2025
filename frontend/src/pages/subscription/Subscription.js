@@ -52,6 +52,7 @@ const Subscription = () => {
   const [cancelDialog, setCancelDialog] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [subscriptionHistory, setSubscriptionHistory] = useState([]);
+  const [portalLoading, setPortalLoading] = useState(false);
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
 
@@ -102,9 +103,9 @@ const Subscription = () => {
   const handleCancelSubscription = async () => {
     try {
       setLoading(true);
-      
+
       const response = await axios.post('/api/subscription/cancel');
-      
+
       if (response.data.success) {
         updateUser(response.data.user);
         toast.success('Subscription cancelled successfully');
@@ -114,6 +115,23 @@ const Subscription = () => {
       toast.error(error.response?.data?.message || 'Failed to cancel subscription');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      setPortalLoading(true);
+      const response = await axios.post('/api/subscription/create-portal-session');
+
+      if (response.data.success && response.data.url) {
+        // Open Stripe Customer Portal in new window
+        window.open(response.data.url, '_blank');
+        toast.success('Opening Stripe billing portal...');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to open billing portal');
+    } finally {
+      setPortalLoading(false);
     }
   };
 
@@ -353,21 +371,34 @@ const Subscription = () => {
                 
                 <Box sx={{ mt: 3 }}>
                   {isPremium ? (
-                    <Button
-                      variant="contained"
-                      size="large"
-                      disabled
-                      fullWidth
-                      sx={{
-                        background: 'linear-gradient(45deg, #FF8F00, #FFA000)',
-                        '&:disabled': {
-                          background: 'linear-gradient(45deg, #FF8F00, #FFA000)',
-                          color: 'white'
-                        }
-                      }}
-                    >
-                      Current Plan
-                    </Button>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        fullWidth
+                        onClick={handleManageSubscription}
+                        disabled={portalLoading || !user?.subscription?.stripeCustomerId}
+                        startIcon={portalLoading ? <CircularProgress size={20} color="inherit" /> : <Payment />}
+                        sx={{
+                          background: 'linear-gradient(45deg, #2E7D32, #4CAF50)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #1B5E20, #2E7D32)'
+                          }
+                        }}
+                      >
+                        {portalLoading ? 'Loading...' : 'Manage Subscription'}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="medium"
+                        fullWidth
+                        color="error"
+                        onClick={() => setCancelDialog(true)}
+                        startIcon={<Cancel />}
+                      >
+                        Cancel Plan
+                      </Button>
+                    </Box>
                   ) : (
                     <Button
                       variant="contained"

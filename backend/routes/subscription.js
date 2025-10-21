@@ -314,4 +314,43 @@ router.post('/check-expired', async (req, res) => {
   }
 });
 
+// Create Stripe Customer Portal session
+router.post('/create-portal-session', async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user has a Stripe customer ID
+    if (!user.subscription.stripeCustomerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active Stripe customer found. Please subscribe first.'
+      });
+    }
+
+    // Create Stripe Customer Portal session
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.subscription.stripeCustomerId,
+      return_url: `${process.env.FRONTEND_URL}/dashboard`,
+    });
+
+    res.json({
+      success: true,
+      url: session.url
+    });
+  } catch (error) {
+    console.error('Create portal session error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create portal session'
+    });
+  }
+});
+
 module.exports = router;
