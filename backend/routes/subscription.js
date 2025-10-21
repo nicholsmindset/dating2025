@@ -35,18 +35,18 @@ router.get('/status', async (req, res) => {
     }).length;
 
     const subscriptionData = {
-      isPremium: user.subscription.isPremium,
+      isPremium: user.isPremium(),
       startDate: user.subscription.startDate,
       endDate: user.subscription.endDate,
       plan: user.subscription.plan,
       monthlyViews,
-      viewsRemaining: user.subscription.isPremium ? 'unlimited' : Math.max(0, 10 - monthlyViews),
+      viewsRemaining: user.isPremium() ? 'unlimited' : Math.max(0, 10 - monthlyViews),
       features: {
-        unlimitedViews: user.subscription.isPremium,
-        unblurredPhotos: user.subscription.isPremium,
-        advancedFilters: user.subscription.isPremium,
-        prioritySupport: user.subscription.isPremium,
-        readReceipts: user.subscription.isPremium
+        unlimitedViews: user.isPremium(),
+        unblurredPhotos: user.isPremium(),
+        advancedFilters: user.isPremium(),
+        prioritySupport: user.isPremium(),
+        readReceipts: user.isPremium()
       }
     };
 
@@ -116,7 +116,7 @@ router.post('/create-payment-intent', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.subscription.isPremium && user.subscription.endDate > new Date()) {
+    if (user.isPremium() && user.subscription.endDate > new Date()) {
       return res.status(400).json({ message: 'You already have an active premium subscription' });
     }
 
@@ -151,7 +151,7 @@ router.post('/create', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.subscription.isPremium && user.subscription.endDate > new Date()) {
+    if (user.isPremium() && user.subscription.endDate > new Date()) {
       return res.status(400).json({ message: 'You already have an active premium subscription' });
     }
 

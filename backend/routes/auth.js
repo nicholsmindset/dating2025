@@ -329,11 +329,9 @@ router.post('/forgot-password', [
     await user.save();
 
     // In production, send email with reset link
-    // For now, return the token (remove in production)
     res.json({
       success: true,
-      message: 'Password reset instructions sent to your email',
-      resetToken // Remove this in production
+      message: 'Password reset instructions sent to your email'
     });
 
   } catch (error) {

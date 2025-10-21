@@ -80,6 +80,19 @@ const chatSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+
+  // Alternative status field (for backward compatibility)
+  status: {
+    type: String,
+    enum: ['active', 'archived', 'deleted'],
+    default: 'active'
+  },
+
+  // Track which users have deleted the chat (soft delete)
+  deletedFor: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   
   // Last activity
   lastMessage: {
@@ -211,18 +224,43 @@ chatSchema.methods.markAsRead = function(userId) {
 chatSchema.methods.canUserSendMessage = function(userId) {
   // Check if chat is active
   if (!this.isActive) return false;
-  
+
   // Check if chat is blocked
   if (this.isBlocked) return false;
-  
+
   // Check if user is participant
   if (!this.participants.includes(userId)) return false;
-  
+
   // Check wali approval if required
   if (this.waliSupervision.isRequired && !this.waliSupervision.isApproved) {
     return false;
   }
-  
+
+  return true;
+};
+
+// Method to check if user can view messages
+chatSchema.methods.canUserViewMessages = function(userId) {
+  // Convert userId to string for comparison
+  const userIdStr = userId.toString();
+
+  // Check if user is a participant
+  const isParticipant = this.participants.some(p => p.toString() === userIdStr);
+  if (!isParticipant) {
+    // Check if user is the wali
+    if (this.waliSupervision.waliUser &&
+        this.waliSupervision.waliUser.toString() === userIdStr &&
+        this.waliSupervision.waliCanView) {
+      return true;
+    }
+    return false;
+  }
+
+  // Check if chat was deleted for this user
+  if (this.deletedFor && this.deletedFor.some(u => u.toString() === userIdStr)) {
+    return false;
+  }
+
   return true;
 };
 
@@ -276,15 +314,20 @@ chatSchema.statics.createChat = function(participant1Id, participant2Id, require
     participants: [participant1Id, participant2Id],
     chatType: requireWaliApproval ? 'wali_supervised' : 'direct'
   };
-  
+
   if (requireWaliApproval) {
     chatData.waliSupervision = {
       isRequired: true,
       isApproved: false
     };
   }
-  
+
   return this.create(chatData);
+};
+
+// Alias for createChat (for backward compatibility)
+chatSchema.statics.createNewChat = function(participant1Id, participant2Id, requireWaliApproval = false) {
+  return this.createChat(participant1Id, participant2Id, requireWaliApproval);
 };
 
 // Ensure virtual fields are serialized

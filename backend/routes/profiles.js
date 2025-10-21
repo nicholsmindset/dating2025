@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const { pusherService } = require('../services/pusherService');
 const rateLimit = require('express-rate-limit');
+const { validate, validationRules } = require('../middleware/validate');
 const router = express.Router();
 
 // Rate limiting for profile operations
@@ -89,7 +90,7 @@ router.post('/:userId/view', async (req, res) => {
     }
 
     // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -215,7 +216,7 @@ router.get('/:userId', async (req, res) => {
     }
 
     // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -259,7 +260,7 @@ router.get('/:userId', async (req, res) => {
 
     // Blur images for free users viewing other profiles
     let profileData = user.toObject();
-    if (!currentUser.subscription.isPremium && req.params.userId !== req.user.id) {
+    if (!currentUser.isPremium() && req.params.userId !== req.user.id) {
       profileData.imagesBlurred = true;
       // Keep profile photo but mark as blurred
       if (profileData.additionalPhotos) {
@@ -299,7 +300,7 @@ router.get('/', async (req, res) => {
     }
 
     // Check monthly view limit for free users
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -365,7 +366,7 @@ router.get('/', async (req, res) => {
     // Blur images for free users
     let profilesData = users.map(user => {
       let userData = user.toObject();
-      if (!currentUser.subscription.isPremium) {
+      if (!currentUser.isPremium()) {
         userData.imagesBlurred = true;
       }
       return userData;
@@ -378,7 +379,7 @@ router.get('/', async (req, res) => {
         pages: Math.ceil(total / limit),
         total
       },
-      viewsRemaining: currentUser.subscription.isPremium ? 'unlimited' : Math.max(0, 10 - currentUser.profileViews.filter(view => {
+      viewsRemaining: currentUser.isPremium() ? 'unlimited' : Math.max(0, 10 - currentUser.profileViews.filter(view => {
         const viewDate = new Date(view.viewedAt);
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
@@ -436,13 +437,12 @@ router.delete('/:userId/block', async (req, res) => {
 });
 
 // Report user
-router.post('/:userId/report', async (req, res) => {
+router.post('/:userId/report',
+  [...validationRules.userId, ...validationRules.report],
+  validate,
+  async (req, res) => {
   try {
     const { reason, description } = req.body;
-    
-    if (!reason) {
-      return res.status(400).json({ message: 'Report reason is required' });
-    }
 
     if (req.params.userId === req.user.id) {
       return res.status(400).json({ message: 'Cannot report yourself' });
