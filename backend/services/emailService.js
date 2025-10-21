@@ -337,10 +337,168 @@ const sendWaliNotificationEmail = async (user) => {
   }
 };
 
+// Send wali verification email (for wali account setup)
+const sendWaliVerificationEmail = async (wali, verificationToken) => {
+  try {
+    const transporter = createTransporter();
+
+    const verificationUrl = `${process.env.FRONTEND_URL}/wali/verify?token=${verificationToken}`;
+
+    const mailOptions = {
+      from: `"Islamic Dating Platform" <${process.env.EMAIL_USER}>`,
+      to: wali.email,
+      subject: 'Wali Account Verification - Islamic Dating Platform',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .info-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 15px 0; }
+            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Wali Account Verification</h1>
+            </div>
+            <div class="content">
+              <p>Assalamu Alaikum ${wali.name},</p>
+
+              <p>You have been designated as a wali (guardian) on Islamic Dating Platform. This account will allow you to oversee and guide the marriage search process according to Islamic principles.</p>
+
+              <div class="info-box">
+                <strong>Your Ward's Information:</strong><br>
+                You will be able to view their profile, matches, and supervise conversations to ensure all interactions remain halal and appropriate.
+              </div>
+
+              <p>To activate your wali account and set your password, please click the button below:</p>
+
+              <div style="text-align: center;">
+                <a href="${verificationUrl}" class="button">Activate Wali Account</a>
+              </div>
+
+              <p>Or copy and paste this link in your browser:</p>
+              <p style="word-break: break-all; color: #667eea;">${verificationUrl}</p>
+
+              <p><strong>As a Wali, you will be able to:</strong></p>
+              <ul>
+                <li>View your ward's profile and activity</li>
+                <li>Review and approve new conversations</li>
+                <li>Monitor all messages for appropriateness</li>
+                <li>Block unsuitable matches</li>
+                <li>Receive notifications about important activities</li>
+              </ul>
+
+              <p>This is an important responsibility in ensuring a halal and successful marriage search.</p>
+
+              <p>May Allah guide us all to what is best.</p>
+
+              <p>Best regards,<br>Islamic Dating Platform Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Islamic Dating Platform. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending wali verification email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Send wali notification for new conversation request
+const sendWaliConversationRequestEmail = async (wali, ward, otherUser, chatId) => {
+  try {
+    const transporter = createTransporter();
+
+    const reviewUrl = `${process.env.FRONTEND_URL}/wali/dashboard/chats/${chatId}`;
+
+    const mailOptions = {
+      from: `"Islamic Dating Platform" <${process.env.EMAIL_USER}>`,
+      to: wali.email,
+      subject: `New Conversation Request Requires Your Approval`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .profile-box { background: white; border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 5px; }
+            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>New Conversation Request</h1>
+            </div>
+            <div class="content">
+              <p>Assalamu Alaikum ${wali.name},</p>
+
+              <p>${ward.firstName} has a new conversation request that requires your approval.</p>
+
+              <div class="profile-box">
+                <h3>Potential Match Details:</h3>
+                <p><strong>Name:</strong> ${otherUser.firstName} ${otherUser.lastName}</p>
+                <p><strong>Age:</strong> ${otherUser.age} years old</p>
+                <p><strong>Location:</strong> ${otherUser.location?.city}, ${otherUser.location?.country}</p>
+                <p><strong>Marital Status:</strong> ${otherUser.maritalStatus}</p>
+                <p><strong>Religious Level:</strong> ${otherUser.religiousLevel}</p>
+                <p><strong>Prayer Frequency:</strong> ${otherUser.prayerFrequency}</p>
+                ${otherUser.bio ? `<p><strong>Bio:</strong> ${otherUser.bio.substring(0, 200)}${otherUser.bio.length > 200 ? '...' : ''}</p>` : ''}
+              </div>
+
+              <p>Please review this match and decide whether to approve or reject this conversation.</p>
+
+              <div style="text-align: center;">
+                <a href="${reviewUrl}" class="button">Review & Decide</a>
+              </div>
+
+              <p>You can also log in to your wali dashboard to view full details and make your decision.</p>
+
+              <p>May Allah guide ${ward.firstName} to a righteous spouse.</p>
+
+              <p>Best regards,<br>Islamic Dating Platform Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Islamic Dating Platform. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending wali conversation request email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   generateVerificationToken,
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
-  sendWaliNotificationEmail
+  sendWaliNotificationEmail,
+  sendWaliVerificationEmail,
+  sendWaliConversationRequestEmail
 };

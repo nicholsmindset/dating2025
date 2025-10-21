@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const Wali = require('../models/Wali');
 const { auth } = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
 const {
@@ -9,7 +10,8 @@ const {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
-  sendWaliNotificationEmail
+  sendWaliNotificationEmail,
+  sendWaliVerificationEmail
 } = require('../services/emailService');
 
 const router = express.Router();
@@ -165,11 +167,43 @@ router.post('/register', [
       // Continue registration even if email fails
     }
 
-    // Send notification to wali if applicable
-    if (user.wali?.hasWali) {
-      const waliEmailResult = await sendWaliNotificationEmail(user);
-      if (!waliEmailResult.success) {
-        console.error('Failed to send wali notification:', waliEmailResult.error);
+    // Create wali account if user has wali
+    if (user.wali?.hasWali && wali.waliEmail) {
+      try {
+        // Check if wali account already exists
+        let waliAccount = await Wali.findOne({ email: wali.waliEmail });
+
+        if (!waliAccount) {
+          // Create new wali account
+          const waliVerificationToken = generateVerificationToken();
+
+          waliAccount = new Wali({
+            name: wali.waliName,
+            email: wali.waliEmail,
+            phone: wali.waliContact,
+            relation: wali.waliRelation,
+            ward: user._id,
+            isVerified: false,
+            verificationToken: waliVerificationToken
+          });
+
+          await waliAccount.save();
+
+          // Send wali verification email
+          const waliVerifyResult = await sendWaliVerificationEmail(waliAccount, waliVerificationToken);
+          if (!waliVerifyResult.success) {
+            console.error('Failed to send wali verification email:', waliVerifyResult.error);
+          }
+        } else {
+          // Wali account exists, just send notification
+          const waliEmailResult = await sendWaliNotificationEmail(user);
+          if (!waliEmailResult.success) {
+            console.error('Failed to send wali notification:', waliEmailResult.error);
+          }
+        }
+      } catch (waliError) {
+        console.error('Error creating wali account:', waliError);
+        // Continue registration even if wali creation fails
       }
     }
 
