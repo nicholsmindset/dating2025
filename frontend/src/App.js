@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { PusherProvider } from './contexts/PusherContext';
+import { WaliProvider } from './contexts/WaliContext';
 
 // Components
 import Navbar from './components/layout/Navbar';
@@ -27,15 +28,21 @@ import Subscription from './pages/subscription/Subscription';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import NotFound from './pages/NotFound';
 
+// Wali Pages
+import WaliLogin from './pages/wali/WaliLogin';
+import WaliDashboard from './pages/wali/WaliDashboard';
+import WaliVerifyEmail from './pages/wali/WaliVerifyEmail';
+
 
 
 function App() {
   return (
-    <SubscriptionProvider>
-      <ChatProvider>
-        <PusherProvider>
-              <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-                <Navbar />
+    <WaliProvider>
+      <SubscriptionProvider>
+        <ChatProvider>
+          <PusherProvider>
+                <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+                  <Navbar />
                 
                 <main style={{ flex: 1, paddingTop: '80px' }}>
                   <Routes>
@@ -83,7 +90,12 @@ function App() {
                         <AdminDashboard />
                       </ProtectedRoute>
                     } />
-                    
+
+                    {/* Wali Routes */}
+                    <Route path="/wali/login" element={<WaliLogin />} />
+                    <Route path="/wali/verify" element={<WaliVerifyEmail />} />
+                    <Route path="/wali/dashboard" element={<WaliDashboard />} />
+
                     {/* Catch all route */}
                     <Route path="/404" element={<NotFound />} />
                     <Route path="*" element={<Navigate to="/404" replace />} />
@@ -105,10 +117,11 @@ function App() {
                   pauseOnHover
                   theme="light"
                 />
-              </div>
-        </PusherProvider>
-      </ChatProvider>
-    </SubscriptionProvider>
+                </div>
+          </PusherProvider>
+        </ChatProvider>
+      </SubscriptionProvider>
+    </WaliProvider>
   );
 }
 
