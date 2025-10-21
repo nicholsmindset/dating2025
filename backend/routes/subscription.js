@@ -233,7 +233,8 @@ router.get('/history', async (req, res) => {
 });
 
 // Stripe webhook endpoint
-router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+// NOTE: Raw body parser configured globally in server.js line 36 for this route
+router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
@@ -252,30 +253,6 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
     res.status(500).json({ message: 'Webhook handler error' });
   }
 });
-
-// Simulate payment processing
-async function simulatePayment(paymentMethod, amount) {
-  // Simulate payment processing delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Simulate payment success/failure (90% success rate)
-  const success = Math.random() > 0.1;
-  
-  if (success) {
-    return {
-      success: true,
-      paymentId: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      amount,
-      currency: 'SGD',
-      method: paymentMethod
-    };
-  } else {
-    return {
-      success: false,
-      error: 'Payment declined by bank'
-    };
-  }
-}
 
 // Check expired subscriptions (cron job endpoint)
 router.post('/check-expired', async (req, res) => {

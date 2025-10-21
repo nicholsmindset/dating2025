@@ -43,10 +43,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/islamic-dating', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+// NOTE: useNewUrlParser and useUnifiedTopology are deprecated and no longer needed in Mongoose 6+
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/islamic-dating')
 .then(() => logger.info('MongoDB connected successfully'))
 .catch(err => logger.error('MongoDB connection error', err));
 

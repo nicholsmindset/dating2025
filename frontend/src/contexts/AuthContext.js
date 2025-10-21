@@ -113,7 +113,7 @@ const setAuthToken = (token) => {
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Load user on app start
+  // Load user on app start (one-time initialization from localStorage)
   useEffect(() => {
     if (state.token) {
       setAuthToken(state.token);
@@ -121,7 +121,8 @@ export const AuthProvider = ({ children }) => {
     } else {
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty - should only run once on mount to load token from localStorage
 
   // Load user from token
   const loadUser = async () => {

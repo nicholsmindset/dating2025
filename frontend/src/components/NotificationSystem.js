@@ -60,27 +60,27 @@ const NotificationSystem = () => {
 
   const getNotificationIcon = (type) => {
     switch (type) {
-      case 'message':
-        return <MessageIcon color="primary" />;
-      case 'like':
-        return <FavoriteIcon color="error" />;
-      case 'profile_view':
-        return <VisibilityIcon color="info" />;
-      default:
-        return <NotificationsIcon />;
+    case 'message':
+      return <MessageIcon color="primary" />;
+    case 'like':
+      return <FavoriteIcon color="error" />;
+    case 'profile_view':
+      return <VisibilityIcon color="info" />;
+    default:
+      return <NotificationsIcon />;
     }
   };
 
   const getNotificationText = (notification) => {
     switch (notification.type) {
-      case 'message':
-        return `New message from ${notification.senderName}`;
-      case 'like':
-        return `${notification.senderName} liked your profile`;
-      case 'profile_view':
-        return `${notification.senderName} viewed your profile`;
-      default:
-        return notification.message || 'New notification';
+    case 'message':
+      return `New message from ${notification.senderName}`;
+    case 'like':
+      return `${notification.senderName} liked your profile`;
+    case 'profile_view':
+      return `${notification.senderName} viewed your profile`;
+    default:
+      return notification.message || 'New notification';
     }
   };
 
@@ -114,7 +114,7 @@ const NotificationSystem = () => {
           </Typography>
         </Box>
         <Divider />
-        
+
         {notifications.length === 0 ? (
           <MenuItem disabled>
             <Typography variant="body2" color="text.secondary">

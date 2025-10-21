@@ -39,6 +39,10 @@ const auth = async (req, res, next) => {
     }
 
     // Add user to request object
+    // NOTE: Both 'id' and 'userId' are provided for backward compatibility
+    // - req.user.id: String version of user ID (used in legacy routes)
+    // - req.user.userId: ObjectId version (used in v1 routes)
+    // TODO: Standardize on req.user.userId in future refactor
     req.user = {
       id: user._id.toString(),
       userId: user._id,
@@ -197,6 +201,7 @@ const optionalAuth = async (req, res, next) => {
     const user = await User.findById(decoded.userId).select('-password');
     
     if (user && user.isActive) {
+      // NOTE: Both 'id' and 'userId' provided for backward compatibility
       req.user = {
         id: user._id.toString(),
         userId: user._id,
