@@ -24,6 +24,7 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { LoginSEO } from '../../components/common/SEO';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -75,8 +76,10 @@ const Login = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 8 }}>
-      <motion.div
+    <>
+      <LoginSEO />
+      <Container maxWidth="sm" sx={{ py: 8 }}>
+        <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -327,7 +330,8 @@ const Login = () => {
           </Box>
         </Paper>
       </motion.div>
-    </Container>
+      </Container>
+    </>
   );
 };
 

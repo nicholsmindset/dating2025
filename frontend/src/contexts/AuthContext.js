@@ -140,10 +140,30 @@ export const AuthProvider = ({ children }) => {
   // Register user
   const register = async (userData) => {
     dispatch({ type: AUTH_ACTIONS.REGISTER_START });
-    
+
     try {
       const response = await axios.post('/api/auth/register', userData);
-      
+
+      // Check if email verification is required
+      if (response.data.requiresVerification) {
+        // Don't log user in yet, they need to verify email first
+        dispatch({
+          type: AUTH_ACTIONS.REGISTER_FAILURE,
+          payload: null // No error, just not authenticated yet
+        });
+
+        toast.success(response.data.message || 'Registration successful! Please check your email to verify your account.', {
+          autoClose: 8000
+        });
+
+        return {
+          success: true,
+          requiresVerification: true,
+          user: response.data.user
+        };
+      }
+
+      // Old flow - no verification required
       dispatch({
         type: AUTH_ACTIONS.REGISTER_SUCCESS,
         payload: {
@@ -151,19 +171,19 @@ export const AuthProvider = ({ children }) => {
           token: response.data.token
         }
       });
-      
+
       setAuthToken(response.data.token);
       toast.success('Registration successful! Welcome to our Islamic community.');
-      
+
       return { success: true, user: response.data.user };
     } catch (error) {
       const errorMessage = error.response?.data?.message || 'Registration failed';
-      
+
       dispatch({
         type: AUTH_ACTIONS.REGISTER_FAILURE,
         payload: errorMessage
       });
-      
+
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
     }
@@ -172,10 +192,10 @@ export const AuthProvider = ({ children }) => {
   // Login user
   const login = async (email, password) => {
     dispatch({ type: AUTH_ACTIONS.LOGIN_START });
-    
+
     try {
       const response = await axios.post('/api/auth/login', { email, password });
-      
+
       dispatch({
         type: AUTH_ACTIONS.LOGIN_SUCCESS,
         payload: {
@@ -183,21 +203,29 @@ export const AuthProvider = ({ children }) => {
           token: response.data.token
         }
       });
-      
+
       setAuthToken(response.data.token);
       toast.success(`Welcome back, ${response.data.user.firstName}!`);
-      
+
       return { success: true, user: response.data.user };
     } catch (error) {
       const errorMessage = error.response?.data?.message || 'Login failed';
-      
+      const requiresVerification = error.response?.data?.requiresVerification || false;
+
       dispatch({
         type: AUTH_ACTIONS.LOGIN_FAILURE,
         payload: errorMessage
       });
-      
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
+
+      toast.error(errorMessage, {
+        autoClose: requiresVerification ? 8000 : 5000
+      });
+
+      return {
+        success: false,
+        error: errorMessage,
+        requiresVerification
+      };
     }
   };
 

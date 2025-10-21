@@ -92,7 +92,9 @@ const userSchema = new mongoose.Schema({
       type: String,
       required: true
     },
-    state: String
+    state: String,
+    latitude: Number,
+    longitude: Number
   },
   
   // Profile Information
@@ -185,7 +187,18 @@ const userSchema = new mongoose.Schema({
   verificationToken: String,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
-  
+
+  // Photo Verification
+  isPhotoVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationBadge: {
+    type: String,
+    enum: ['none', 'verified', 'premium_verified'],
+    default: 'none'
+  },
+
   // Privacy Settings
   privacy: {
     showAge: { type: Boolean, default: true },
@@ -259,7 +272,40 @@ const userSchema = new mongoose.Schema({
     reportedAt: {
       type: Date,
       default: Date.now
-    }
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    reviewedAt: Date,
+    adminNotes: String,
+    action: String
+  }],
+
+  // Suspension details
+  suspensionReason: String,
+  suspendedAt: Date,
+  suspendedUntil: Date,
+  suspendedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+
+  // Saved Searches
+  savedSearches: [{
+    name: {
+      type: String,
+      required: true
+    },
+    filters: {
+      type: Object,
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: Date
   }]
 }, {
   timestamps: true

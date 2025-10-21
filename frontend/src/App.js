@@ -7,6 +7,8 @@ import 'react-toastify/dist/ReactToastify.css';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { PusherProvider } from './contexts/PusherContext';
+import { WaliProvider } from './contexts/WaliContext';
+import { SearchProvider } from './contexts/SearchContext';
 
 // Components
 import Navbar from './components/layout/Navbar';
@@ -17,31 +19,51 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import VerifyEmail from './pages/auth/VerifyEmail';
+import ResendVerification from './pages/auth/ResendVerification';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 import Onboarding from './pages/onboarding/Onboarding';
 import Dashboard from './pages/dashboard/Dashboard';
+import MyActivity from './pages/dashboard/MyActivity';
 import Profile from './pages/profile/Profile';
 import Chat from './pages/chat/Chat';
 import Subscription from './pages/subscription/Subscription';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import NotFound from './pages/NotFound';
 
+// Wali Pages
+import WaliLogin from './pages/wali/WaliLogin';
+import WaliDashboard from './pages/wali/WaliDashboard';
+import WaliVerifyEmail from './pages/wali/WaliVerifyEmail';
+
+// Search Pages
+import AdvancedSearch from './pages/search/AdvancedSearch';
+import SavedSearches from './pages/search/SavedSearches';
+
 
 
 function App() {
   return (
-    <SubscriptionProvider>
-      <ChatProvider>
-        <PusherProvider>
-              <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-                <Navbar />
-                
-                <main style={{ flex: 1, paddingTop: '80px' }}>
+    <WaliProvider>
+      <SubscriptionProvider>
+        <SearchProvider>
+          <ChatProvider>
+            <PusherProvider>
+                  <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+                    <Navbar />
+
+                  <main style={{ flex: 1, paddingTop: '80px' }}>
                   <Routes>
                     {/* Public Routes */}
                     <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
-                    
+                    <Route path="/verify-email" element={<VerifyEmail />} />
+                    <Route path="/resend-verification" element={<ResendVerification />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+
                     {/* Protected Routes */}
                     <Route path="/onboarding" element={
                       <ProtectedRoute>
@@ -54,7 +76,13 @@ function App() {
                         <Dashboard />
                       </ProtectedRoute>
                     } />
-                    
+
+                    <Route path="/my-activity" element={
+                      <ProtectedRoute>
+                        <MyActivity />
+                      </ProtectedRoute>
+                    } />
+
                     <Route path="/profile/:userId" element={
                       <ProtectedRoute>
                         <Profile />
@@ -72,39 +100,59 @@ function App() {
                         <Subscription />
                       </ProtectedRoute>
                     } />
-                    
+
+                    {/* Search Routes */}
+                    <Route path="/search" element={
+                      <ProtectedRoute>
+                        <AdvancedSearch />
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/saved-searches" element={
+                      <ProtectedRoute>
+                        <SavedSearches />
+                      </ProtectedRoute>
+                    } />
+
                     {/* Admin Routes */}
                     <Route path="/admin/*" element={
                       <ProtectedRoute requireAdmin={true}>
                         <AdminDashboard />
                       </ProtectedRoute>
                     } />
-                    
+
+                    {/* Wali Routes */}
+                    <Route path="/wali/login" element={<WaliLogin />} />
+                    <Route path="/wali/verify" element={<WaliVerifyEmail />} />
+                    <Route path="/wali/dashboard" element={<WaliDashboard />} />
+
                     {/* Catch all route */}
                     <Route path="/404" element={<NotFound />} />
                     <Route path="*" element={<Navigate to="/404" replace />} />
                   </Routes>
                 </main>
                 
-                <Footer />
-                
-                {/* Toast notifications */}
-                <ToastContainer
-                  position="top-right"
-                  autoClose={5000}
-                  hideProgressBar={false}
-                  newestOnTop={false}
-                  closeOnClick
-                  rtl={false}
-                  pauseOnFocusLoss
-                  draggable
-                  pauseOnHover
-                  theme="light"
-                />
-              </div>
-        </PusherProvider>
-      </ChatProvider>
-    </SubscriptionProvider>
+                  <Footer />
+
+                  {/* Toast notifications */}
+                  <ToastContainer
+                    position="top-right"
+                    autoClose={5000}
+                    hideProgressBar={false}
+                    newestOnTop={false}
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    draggable
+                    pauseOnHover
+                    theme="light"
+                  />
+                  </div>
+            </PusherProvider>
+          </ChatProvider>
+        </SearchProvider>
+      </SubscriptionProvider>
+    </WaliProvider>
   );
 }
 

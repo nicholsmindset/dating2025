@@ -38,6 +38,7 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { RegisterSEO } from '../../components/common/SEO';
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -86,7 +87,7 @@ const Register = () => {
     
     // Islamic Profile
     maritalStatus: Yup.string()
-      .oneOf(['widow', 'divorced', 'separated'], 'Please select your marital status')
+      .oneOf(['never_married', 'widow', 'divorced', 'separated'], 'Please select your marital status')
       .required('Marital status is required'),
     religiousLevel: Yup.string()
       .oneOf(['practicing', 'moderate', 'learning'], 'Please select your religious level')
@@ -193,7 +194,15 @@ const Register = () => {
 
       const result = await register(userData);
       if (result.success) {
-        navigate('/onboarding');
+        // Check if email verification is required
+        if (result.requiresVerification) {
+          // Show success message and stay on page - user will get email
+          // The error state in useAuth will show the message
+          // User can click "Resend Verification" link if needed
+        } else {
+          // If no verification required (old flow), navigate to onboarding
+          navigate('/onboarding');
+        }
       }
     }
   });
@@ -399,6 +408,7 @@ const Register = () => {
                   onBlur={formik.handleBlur}
                   label="Marital Status"
                 >
+                  <MenuItem value="never_married">Never Married</MenuItem>
                   <MenuItem value="widow">Widow</MenuItem>
                   <MenuItem value="divorced">Divorced</MenuItem>
                   <MenuItem value="separated">Separated</MenuItem>
@@ -656,8 +666,10 @@ const Register = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <motion.div
+    <>
+      <RegisterSEO />
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -781,7 +793,8 @@ const Register = () => {
           </Box>
         </Paper>
       </motion.div>
-    </Container>
+      </Container>
+    </>
   );
 };
 
