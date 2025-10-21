@@ -36,6 +36,10 @@ app.use('/api/subscription/webhook', express.raw({type: 'application/json'}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Activity tracking middleware
+const { trackActivity } = require('./middleware/activityTracker');
+app.use(trackActivity);
+
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/islamic-dating', {
   useNewUrlParser: true,
@@ -57,6 +61,7 @@ app.use('/api/wali', require('./routes/wali'));
 app.use('/api/photo-verification', require('./routes/photoVerification'));
 app.use('/api/moderation', require('./routes/moderation'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
