@@ -44,6 +44,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { DashboardSEO } from '../../components/common/SEO';
+import Breadcrumbs from '../../components/common/Breadcrumbs';
 
 const Dashboard = () => {
   const [profiles, setProfiles] = useState([]);
@@ -341,9 +343,12 @@ const Dashboard = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
+    <>
+      <DashboardSEO />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Breadcrumbs />
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
           Discover Profiles
         </Typography>
@@ -648,7 +653,8 @@ const Dashboard = () => {
           <Chat />
         </Badge>
       </Fab>
-    </Container>
+      </Container>
+    </>
   );
 };
 

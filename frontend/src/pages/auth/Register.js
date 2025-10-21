@@ -38,6 +38,7 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { RegisterSEO } from '../../components/common/SEO';
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -665,8 +666,10 @@ const Register = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <motion.div
+    <>
+      <RegisterSEO />
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -790,7 +793,8 @@ const Register = () => {
           </Box>
         </Paper>
       </motion.div>
-    </Container>
+      </Container>
+    </>
   );
 };
 

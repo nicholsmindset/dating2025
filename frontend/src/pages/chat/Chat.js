@@ -39,6 +39,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePusher } from '../../contexts/PusherContext';
 import { formatDistanceToNow } from 'date-fns';
 import { WithOnlineStatus } from '../../components/OnlineStatus';
+import { ChatSEO } from '../../components/common/SEO';
+import Breadcrumbs from '../../components/common/Breadcrumbs';
 
 const Chat = () => {
   const { user } = useAuth();
@@ -201,10 +203,13 @@ const Chat = () => {
   };
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', p: 2 }}>
-      <Grid container spacing={2} sx={{ height: '100%' }}>
-        {/* Chat List */}
-        <Grid item xs={12} md={4}>
+    <>
+      <ChatSEO />
+      <Box sx={{ height: 'calc(100vh - 120px)', p: 2 }}>
+        <Breadcrumbs />
+        <Grid container spacing={2} sx={{ height: '100%' }}>
+          {/* Chat List */}
+          <Grid item xs={12} md={4}>
           <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
               <Typography variant="h6" sx={{ color: '#2E7D32', fontWeight: 'bold' }}>
@@ -557,15 +562,16 @@ const Chat = () => {
 
       {/* Error Display */}
       {error && (
-        <Alert 
-          severity="error" 
+        <Alert
+          severity="error"
           onClose={clearError}
           sx={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}
         >
           {error}
         </Alert>
       )}
-    </Box>
+      </Box>
+    </>
   );
 };
 

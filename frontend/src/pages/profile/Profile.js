@@ -43,6 +43,8 @@ import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { WithOnlineStatus } from '../../components/OnlineStatus';
+import { ProfileSEO } from '../../components/common/SEO';
+import Breadcrumbs from '../../components/common/Breadcrumbs';
 
 const Profile = () => {
   const { userId } = useParams();
@@ -170,8 +172,15 @@ const Profile = () => {
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <motion.div
+    <>
+      <ProfileSEO
+        userName={`${profile.firstName} ${profile.lastName}`}
+        userBio={profile.bio}
+        userPhoto={profile.profilePhoto}
+      />
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Breadcrumbs />
+        <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -534,7 +543,8 @@ const Profile = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+      </Container>
+    </>
   );
 };
 

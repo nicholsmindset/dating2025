@@ -1,0 +1,61 @@
+# Islamic Dating Platform - Robots.txt
+# Updated: 2025-01-15
+
+# Allow all search engines to crawl public pages
+User-agent: *
+
+# Public pages - allow crawling
+Allow: /
+Allow: /login
+Allow: /register
+Allow: /about
+Allow: /faq
+Allow: /contact
+Allow: /privacy
+Allow: /terms
+Allow: /subscription
+
+# Private/Protected pages - disallow crawling
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /chat
+Disallow: /messages
+Disallow: /settings
+Disallow: /admin
+Disallow: /wali
+Disallow: /onboarding
+Disallow: /search
+Disallow: /saved-searches
+Disallow: /my-activity
+
+# API endpoints - disallow crawling
+Disallow: /api/
+
+# Static assets - allow crawling
+Allow: /static/
+Allow: /images/
+Allow: /*.css$
+Allow: /*.js$
+
+# Sitemap location
+Sitemap: https://islamicdating.com/sitemap.xml
+
+# Crawl delay (polite crawling)
+Crawl-delay: 10
+
+# Specific bot instructions
+User-agent: Googlebot
+Crawl-delay: 5
+
+User-agent: Bingbot
+Crawl-delay: 5
+
+# Block malicious bots
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /

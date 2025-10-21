@@ -41,6 +41,8 @@ import { Elements } from '@stripe/react-stripe-js';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import PaymentForm from '../../components/payment/PaymentForm';
+import { SubscriptionSEO } from '../../components/common/SEO';
+import Breadcrumbs from '../../components/common/Breadcrumbs';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
@@ -136,9 +138,12 @@ const Subscription = () => {
   ];
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box textAlign="center" mb={6}>
+    <>
+      <SubscriptionSEO />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Breadcrumbs />
+        {/* Header */}
+        <Box textAlign="center" mb={6}>
         <Typography
           variant="h3"
           component="h1"
@@ -524,7 +529,8 @@ const Subscription = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+      </Container>
+    </>
   );
 };
 

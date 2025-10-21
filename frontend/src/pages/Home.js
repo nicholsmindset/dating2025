@@ -19,6 +19,7 @@ import {
   GroupsRounded,
   VerifiedUserRounded
 } from '@mui/icons-material';
+import { HomeSEO } from '../components/common/SEO';
 
 const MotionBox = motion(Box);
 const MotionCard = motion(Card);
@@ -51,9 +52,11 @@ const Home = () => {
   ];
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
-      {/* Hero Section */}
-      <Box
+    <>
+      <HomeSEO />
+      <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
+        {/* Hero Section */}
+        <Box
         sx={{
           background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.1)} 100%)`,
           py: { xs: 8, md: 12 },
@@ -313,7 +316,8 @@ const Home = () => {
           </MotionBox>
         </Container>
       </Box>
-    </Box>
+      </Box>
+    </>
   );
 };
 
