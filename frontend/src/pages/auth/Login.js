@@ -24,6 +24,8 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import SEO from '../../components/seo/SEO';
+import Breadcrumbs from '../../components/seo/Breadcrumbs';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -75,21 +77,30 @@ const Login = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 8 }}>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <Paper
-          elevation={3}
-          sx={{
-            p: 4,
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)'
-          }}
+    <>
+      <SEO
+        title="Login to Your Account"
+        description="Sign in to your Islamic Dating account to find your perfect halal match. Access your profile, matches, and messages."
+        keywords="muslim login, islamic dating login, sign in"
+        canonicalUrl="https://islamicdating.com/login"
+        noindex={true}
+      />
+      <Breadcrumbs />
+      <Container maxWidth="sm" sx={{ py: 8 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
         >
-          {/* Header */}
+          <Paper
+            elevation={3}
+            sx={{
+              p: 4,
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)'
+            }}
+          >
+            {/* Header */}
           <Box textAlign="center" mb={4}>
             <motion.div
               initial={{ scale: 0 }}
@@ -328,6 +339,7 @@ const Login = () => {
         </Paper>
       </motion.div>
     </Container>
+    </>
   );
 };
 

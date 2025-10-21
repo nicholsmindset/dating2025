@@ -41,6 +41,9 @@ import { Elements } from '@stripe/react-stripe-js';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import PaymentForm from '../../components/payment/PaymentForm';
+import SEO from '../../components/seo/SEO';
+import Breadcrumbs from '../../components/seo/Breadcrumbs';
+import { generateProductListSchema, generateFAQSchema, combineSchemas } from '../../utils/schemaMarkup';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
@@ -135,9 +138,37 @@ const Subscription = () => {
     { text: 'Wali supervision tools', icon: <Security /> }
   ];
 
+  // Mock subscription plans data for Schema markup
+  const subscriptionPlans = [
+    { name: 'free', displayName: 'Free', description: 'Basic features', price: { monthly: { amount: 0 } } },
+    { name: 'basic', displayName: 'Basic', description: 'Enhanced features', price: { monthly: { amount: 999 } } },
+    { name: 'premium', displayName: 'Premium', description: 'All features', price: { monthly: { amount: 1999 } } },
+    { name: 'vip', displayName: 'VIP', description: 'Premium plus extras', price: { monthly: { amount: 2999 } } }
+  ];
+
+  const faqData = [
+    { question: 'Can I cancel my subscription anytime?', answer: 'Yes, you can cancel your subscription at any time. Your subscription will remain active until the end of the current billing period.' },
+    { question: 'Is my payment information secure?', answer: 'Yes, all payments are processed securely through Stripe. We never store your payment information on our servers.' },
+    { question: 'What happens after I subscribe?', answer: 'You will immediately get access to all premium features included in your chosen plan.' }
+  ];
+
+  const schema = combineSchemas(
+    generateProductListSchema(subscriptionPlans),
+    generateFAQSchema(faqData)
+  );
+
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
+    <>
+      <SEO
+        title="Subscription Plans - Choose Your Islamic Dating Plan"
+        description="Choose the perfect subscription plan for your Islamic dating journey. From free to VIP, find the plan that matches your needs. Secure halal matchmaking with premium features."
+        keywords="islamic dating subscription, muslim dating plans, halal matchmaking premium, muslim dating pricing"
+        canonicalUrl="https://islamicdating.com/subscription"
+        schema={schema}
+      />
+      <Breadcrumbs />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        {/* Header */}
       <Box textAlign="center" mb={6}>
         <Typography
           variant="h3"
@@ -525,6 +556,7 @@ const Subscription = () => {
         </DialogActions>
       </Dialog>
     </Container>
+    </>
   );
 };
 

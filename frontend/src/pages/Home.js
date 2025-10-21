@@ -19,6 +19,13 @@ import {
   GroupsRounded,
   VerifiedUserRounded
 } from '@mui/icons-material';
+import SEO from '../components/seo/SEO';
+import {
+  generateWebsiteSchema,
+  generateOrganizationSchema,
+  generateServiceSchema,
+  combineSchemas
+} from '../utils/schemaMarkup';
 
 const MotionBox = motion(Box);
 const MotionCard = motion(Card);
@@ -50,8 +57,23 @@ const Home = () => {
     }
   ];
 
+  // Schema markup for homepage
+  const schema = combineSchemas(
+    generateWebsiteSchema(),
+    generateOrganizationSchema(),
+    generateServiceSchema()
+  );
+
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
+      <SEO
+        title="Islamic Dating & Muslim Marriage | Halal Matchmaking Platform"
+        description="Find your perfect halal match with our Islamic dating platform. Faith-centered matchmaking for Muslim singles seeking marriage. Features wali supervision, compatibility scoring, and Islamic values-based matching."
+        keywords="islamic dating, muslim marriage, halal dating, muslim matchmaking, islamic matchmaking, muslim singles, halal marriage, islamic marriage, wali supervision, muslim dating app"
+        canonicalUrl="https://islamicdating.com/"
+        schema={schema}
+      />
+
       {/* Hero Section */}
       <Box
         sx={{
