@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { auth, premiumAuth } = require('../middleware/auth');
 const { pusherService } = require('../services/pusherService');
 const rateLimit = require('express-rate-limit');
+const { validate, validationRules } = require('../middleware/validate');
 const router = express.Router();
 
 // Rate limiting for chat operations
@@ -145,17 +146,14 @@ router.post('/start', auth, chatRateLimit, async (req, res) => {
 });
 
 // Send message
-router.post('/:chatId/messages', auth, messageRateLimit, async (req, res) => {
+router.post('/:chatId/messages',
+  auth,
+  messageRateLimit,
+  [...validationRules.chatId, ...validationRules.message],
+  validate,
+  async (req, res) => {
   try {
     const { content, type = 'text' } = req.body;
-
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ message: 'Message content is required' });
-    }
-
-    if (content.length > 1000) {
-      return res.status(400).json({ message: 'Message too long (max 1000 characters)' });
-    }
 
     const chat = await Chat.findOne({
       _id: req.params.chatId,

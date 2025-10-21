@@ -35,18 +35,18 @@ router.get('/status', async (req, res) => {
     }).length;
 
     const subscriptionData = {
-      isPremium: user.subscription.isPremium,
+      isPremium: user.isPremium(),
       startDate: user.subscription.startDate,
       endDate: user.subscription.endDate,
       plan: user.subscription.plan,
       monthlyViews,
-      viewsRemaining: user.subscription.isPremium ? 'unlimited' : Math.max(0, 10 - monthlyViews),
+      viewsRemaining: user.isPremium() ? 'unlimited' : Math.max(0, 10 - monthlyViews),
       features: {
-        unlimitedViews: user.subscription.isPremium,
-        unblurredPhotos: user.subscription.isPremium,
-        advancedFilters: user.subscription.isPremium,
-        prioritySupport: user.subscription.isPremium,
-        readReceipts: user.subscription.isPremium
+        unlimitedViews: user.isPremium(),
+        unblurredPhotos: user.isPremium(),
+        advancedFilters: user.isPremium(),
+        prioritySupport: user.isPremium(),
+        readReceipts: user.isPremium()
       }
     };
 
@@ -116,7 +116,7 @@ router.post('/create-payment-intent', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.subscription.isPremium && user.subscription.endDate > new Date()) {
+    if (user.isPremium() && user.subscription.endDate > new Date()) {
       return res.status(400).json({ message: 'You already have an active premium subscription' });
     }
 
@@ -151,7 +151,7 @@ router.post('/create', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (user.subscription.isPremium && user.subscription.endDate > new Date()) {
+    if (user.isPremium() && user.subscription.endDate > new Date()) {
       return res.status(400).json({ message: 'You already have an active premium subscription' });
     }
 
@@ -233,7 +233,8 @@ router.get('/history', async (req, res) => {
 });
 
 // Stripe webhook endpoint
-router.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+// NOTE: Raw body parser configured globally in server.js line 36 for this route
+router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
@@ -253,36 +254,18 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req, res
   }
 });
 
-// Simulate payment processing
-async function simulatePayment(paymentMethod, amount) {
-  // Simulate payment processing delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Simulate payment success/failure (90% success rate)
-  const success = Math.random() > 0.1;
-  
-  if (success) {
-    return {
-      success: true,
-      paymentId: `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      amount,
-      currency: 'SGD',
-      method: paymentMethod
-    };
-  } else {
-    return {
-      success: false,
-      error: 'Payment declined by bank'
-    };
-  }
-}
-
 // Check expired subscriptions (cron job endpoint)
 router.post('/check-expired', async (req, res) => {
   try {
-    // This should be called by a cron job, not directly by users
-    // Add authentication for cron jobs in production
-    
+    // Verify cron job authentication token
+    const cronSecret = req.headers['x-cron-secret'];
+    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized - Invalid cron secret'
+      });
+    }
+
     const expiredUsers = await User.find({
       'subscription.status': 'active',
       'subscription.endDate': { $lt: new Date() }
@@ -290,17 +273,60 @@ router.post('/check-expired', async (req, res) => {
 
     for (const user of expiredUsers) {
       user.subscription.status = 'expired';
-      user.subscription.type = 'free';
+      user.subscription.plan = 'free';
       await user.save();
     }
 
-    res.json({ 
+    res.json({
+      success: true,
       message: `Processed ${expiredUsers.length} expired subscriptions`,
       count: expiredUsers.length
     });
   } catch (error) {
     console.error('Check expired subscriptions error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// Create Stripe Customer Portal session
+router.post('/create-portal-session', async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user has a Stripe customer ID
+    if (!user.subscription.stripeCustomerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active Stripe customer found. Please subscribe first.'
+      });
+    }
+
+    // Create Stripe Customer Portal session
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.subscription.stripeCustomerId,
+      return_url: `${process.env.FRONTEND_URL}/dashboard`,
+    });
+
+    res.json({
+      success: true,
+      url: session.url
+    });
+  } catch (error) {
+    console.error('Create portal session error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create portal session'
+    });
   }
 });
 

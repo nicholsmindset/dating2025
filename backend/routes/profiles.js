@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const { pusherService } = require('../services/pusherService');
 const rateLimit = require('express-rate-limit');
+const { validate, validationRules } = require('../middleware/validate');
 const router = express.Router();
 
 // Rate limiting for profile operations
@@ -89,7 +90,7 @@ router.post('/:userId/view', async (req, res) => {
     }
 
     // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -106,24 +107,32 @@ router.post('/:userId/view', async (req, res) => {
       }
     }
 
-    // Add to profile views if not already viewed this month
+    // Add to profile views using atomic operation to prevent race conditions
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    
+
     const alreadyViewedThisMonth = currentUser.profileViews.some(view => {
       const viewDate = new Date(view.viewedAt);
       return view.profileId.toString() === req.params.userId &&
-             viewDate.getMonth() === currentMonth && 
+             viewDate.getMonth() === currentMonth &&
              viewDate.getFullYear() === currentYear;
     });
 
     if (!alreadyViewedThisMonth) {
-      currentUser.profileViews.push({
-        profileId: req.params.userId,
-        viewedAt: new Date()
-      });
-      await currentUser.save();
-      
+      // Use atomic $push operation to avoid race conditions
+      const updateResult = await User.findByIdAndUpdate(
+        req.user.id,
+        {
+          $push: {
+            profileViews: {
+              profileId: req.params.userId,
+              viewedAt: new Date()
+            }
+          }
+        },
+        { new: true }
+      );
+
       // Send profile view notification via Pusher
       const viewerInfo = {
         id: currentUser._id,
@@ -215,7 +224,7 @@ router.get('/:userId', async (req, res) => {
     }
 
     // Check if user has reached view limit (for free users)
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -259,7 +268,7 @@ router.get('/:userId', async (req, res) => {
 
     // Blur images for free users viewing other profiles
     let profileData = user.toObject();
-    if (!currentUser.subscription.isPremium && req.params.userId !== req.user.id) {
+    if (!currentUser.isPremium() && req.params.userId !== req.user.id) {
       profileData.imagesBlurred = true;
       // Keep profile photo but mark as blurred
       if (profileData.additionalPhotos) {
@@ -299,7 +308,7 @@ router.get('/', async (req, res) => {
     }
 
     // Check monthly view limit for free users
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       
@@ -365,7 +374,7 @@ router.get('/', async (req, res) => {
     // Blur images for free users
     let profilesData = users.map(user => {
       let userData = user.toObject();
-      if (!currentUser.subscription.isPremium) {
+      if (!currentUser.isPremium()) {
         userData.imagesBlurred = true;
       }
       return userData;
@@ -378,7 +387,7 @@ router.get('/', async (req, res) => {
         pages: Math.ceil(total / limit),
         total
       },
-      viewsRemaining: currentUser.subscription.isPremium ? 'unlimited' : Math.max(0, 10 - currentUser.profileViews.filter(view => {
+      viewsRemaining: currentUser.isPremium() ? 'unlimited' : Math.max(0, 10 - currentUser.profileViews.filter(view => {
         const viewDate = new Date(view.viewedAt);
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
@@ -436,13 +445,12 @@ router.delete('/:userId/block', async (req, res) => {
 });
 
 // Report user
-router.post('/:userId/report', async (req, res) => {
+router.post('/:userId/report',
+  [...validationRules.userId, ...validationRules.report],
+  validate,
+  async (req, res) => {
   try {
     const { reason, description } = req.body;
-    
-    if (!reason) {
-      return res.status(400).json({ message: 'Report reason is required' });
-    }
 
     if (req.params.userId === req.user.id) {
       return res.status(400).json({ message: 'Cannot report yourself' });

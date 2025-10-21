@@ -21,7 +21,7 @@ router.get('/dashboard', async (req, res) => {
     const [totalUsers, activeUsers, premiumUsers, totalChats, recentReports] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ accountStatus: 'active' }),
-      User.countDocuments({ 'subscription.isPremium': true }),
+      User.countDocuments({ 'subscription.plan': { $in: ['basic', 'premium', 'vip'] } }),
       Chat.countDocuments(),
       User.find({ 'reports.0': { $exists: true } })
         .select('firstName lastName email reports')
@@ -83,8 +83,8 @@ router.get('/users', async (req, res) => {
     const filter = {};
     if (status) filter.accountStatus = status;
     if (gender) filter.gender = gender;
-    if (subscription === 'premium') filter['subscription.isPremium'] = true;
-    if (subscription === 'free') filter['subscription.isPremium'] = false;
+    if (subscription === 'premium') filter['subscription.plan'] = { $in: ['basic', 'premium', 'vip'] };
+    if (subscription === 'free') filter['subscription.plan'] = 'free';
     
     if (search) {
       filter.$or = [
@@ -349,13 +349,13 @@ router.get('/analytics/subscriptions', async (req, res) => {
 
     // Get subscription stats
     const [totalPremium, newPremiumThisPeriod, cancelledThisPeriod] = await Promise.all([
-      User.countDocuments({ 'subscription.isPremium': true }),
+      User.countDocuments({ 'subscription.plan': { $in: ['basic', 'premium', 'vip'] } }),
       User.countDocuments({
-        'subscription.isPremium': true,
+        'subscription.plan': { $in: ['basic', 'premium', 'vip'] },
         'subscription.startDate': { $gte: daysAgo }
       }),
       User.countDocuments({
-        'subscription.isPremium': false,
+        'subscription.plan': 'free',
         'subscription.endDate': { $gte: daysAgo, $lte: new Date() }
       })
     ]);
@@ -443,7 +443,7 @@ router.post('/create-admin', async (req, res) => {
       isEmailVerified: true,
       gender: 'male', // Default, can be changed
       dateOfBirth: new Date('1990-01-01'), // Default
-      maritalStatus: 'single' // Default
+      maritalStatus: 'never_married' // Default
     });
 
     await adminUser.save();

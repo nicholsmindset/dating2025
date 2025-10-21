@@ -109,6 +109,18 @@ const pusherService = {
     } catch (error) {
       console.error('Error sending admin notification via Pusher:', error);
     }
+  },
+
+  // Send gift received notification
+  sendGiftNotification: async (recipientId, eventType, giftData) => {
+    try {
+      await pusher.trigger(`private-user-${recipientId}`, eventType, {
+        ...giftData,
+        timestamp: new Date()
+      });
+    } catch (error) {
+      console.error('Error sending gift notification via Pusher:', error);
+    }
   }
 };
 

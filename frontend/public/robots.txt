@@ -1,0 +1,11 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /chat
+Disallow: /profile/
+Disallow: /dashboard
+
+# Sitemaps
+Sitemap: https://islamicdating.com/sitemap.xml

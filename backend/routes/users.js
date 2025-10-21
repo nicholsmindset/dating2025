@@ -196,7 +196,7 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
 
     // Check if user can view more profiles (subscription limits)
     const currentUser = await User.findById(req.user.id);
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       if (currentUser.profileViewsThisMonth >= 10) {
         return res.status(403).json({ 
           message: 'Monthly profile view limit reached. Upgrade to premium for unlimited views.',
@@ -245,7 +245,7 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
       .limit(parseInt(limit));
 
     // Increment profile views for non-premium users
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       await User.findByIdAndUpdate(req.user.id, {
         $inc: { profileViewsThisMonth: users.length }
       });
@@ -254,7 +254,7 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
     // For free users, blur profile photos
     const processedUsers = users.map(user => {
       const userObj = user.toObject();
-      if (!currentUser.subscription.isPremium) {
+      if (!currentUser.isPremium()) {
         userObj.profilePhotoBlurred = true;
       }
       return userObj;
@@ -270,7 +270,7 @@ router.get('/browse', auth, profileViewLimit, async (req, res) => {
         pages: Math.ceil(total / limit),
         total
       },
-      viewsRemaining: currentUser.subscription.isPremium ? null : (10 - currentUser.profileViewsThisMonth)
+      viewsRemaining: currentUser.isPremium() ? null : (10 - currentUser.profileViewsThisMonth)
     });
   } catch (error) {
     console.error('Browse profiles error:', error);
@@ -301,7 +301,7 @@ router.get('/:userId', auth, async (req, res) => {
     }
 
     // Increment profile view count for non-premium users
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       await User.findByIdAndUpdate(req.user.id, {
         $inc: { profileViewsThisMonth: 1 }
       });
@@ -309,7 +309,7 @@ router.get('/:userId', auth, async (req, res) => {
 
     // For free users, blur profile photos
     const userObj = user.toObject();
-    if (!currentUser.subscription.isPremium) {
+    if (!currentUser.isPremium()) {
       userObj.profilePhotoBlurred = true;
     }
 

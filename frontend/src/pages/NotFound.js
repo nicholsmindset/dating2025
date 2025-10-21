@@ -11,6 +11,7 @@ import {
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { HomeRounded, ArrowBackRounded } from '@mui/icons-material';
+import SEO from '../components/seo/SEO';
 
 const MotionBox = motion(Box);
 
@@ -19,17 +20,23 @@ const NotFound = () => {
   const navigate = useNavigate();
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
-        py: 4
-      }}
-    >
-      <Container maxWidth="md">
+    <>
+      <SEO
+        title="Page Not Found - 404 Error"
+        description="The page you're looking for doesn't exist. Return to Islamic Dating homepage to find your perfect halal match."
+        noindex={true}
+      />
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
+          py: 4
+        }}
+      >
+        <Container maxWidth="md">
         <MotionBox
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
@@ -208,6 +215,7 @@ const NotFound = () => {
         </MotionBox>
       </Container>
     </Box>
+    </>
   );
 };
 

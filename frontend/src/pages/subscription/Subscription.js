@@ -41,6 +41,9 @@ import { Elements } from '@stripe/react-stripe-js';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import PaymentForm from '../../components/payment/PaymentForm';
+import SEO from '../../components/seo/SEO';
+import Breadcrumbs from '../../components/seo/Breadcrumbs';
+import { generateProductListSchema, generateFAQSchema, combineSchemas } from '../../utils/schemaMarkup';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
@@ -49,6 +52,7 @@ const Subscription = () => {
   const [cancelDialog, setCancelDialog] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [subscriptionHistory, setSubscriptionHistory] = useState([]);
+  const [portalLoading, setPortalLoading] = useState(false);
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
 
@@ -99,9 +103,9 @@ const Subscription = () => {
   const handleCancelSubscription = async () => {
     try {
       setLoading(true);
-      
+
       const response = await axios.post('/api/subscription/cancel');
-      
+
       if (response.data.success) {
         updateUser(response.data.user);
         toast.success('Subscription cancelled successfully');
@@ -111,6 +115,23 @@ const Subscription = () => {
       toast.error(error.response?.data?.message || 'Failed to cancel subscription');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      setPortalLoading(true);
+      const response = await axios.post('/api/subscription/create-portal-session');
+
+      if (response.data.success && response.data.url) {
+        // Open Stripe Customer Portal in new window
+        window.open(response.data.url, '_blank');
+        toast.success('Opening Stripe billing portal...');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to open billing portal');
+    } finally {
+      setPortalLoading(false);
     }
   };
 
@@ -135,9 +156,37 @@ const Subscription = () => {
     { text: 'Wali supervision tools', icon: <Security /> }
   ];
 
+  // Mock subscription plans data for Schema markup
+  const subscriptionPlans = [
+    { name: 'free', displayName: 'Free', description: 'Basic features', price: { monthly: { amount: 0 } } },
+    { name: 'basic', displayName: 'Basic', description: 'Enhanced features', price: { monthly: { amount: 999 } } },
+    { name: 'premium', displayName: 'Premium', description: 'All features', price: { monthly: { amount: 1999 } } },
+    { name: 'vip', displayName: 'VIP', description: 'Premium plus extras', price: { monthly: { amount: 2999 } } }
+  ];
+
+  const faqData = [
+    { question: 'Can I cancel my subscription anytime?', answer: 'Yes, you can cancel your subscription at any time. Your subscription will remain active until the end of the current billing period.' },
+    { question: 'Is my payment information secure?', answer: 'Yes, all payments are processed securely through Stripe. We never store your payment information on our servers.' },
+    { question: 'What happens after I subscribe?', answer: 'You will immediately get access to all premium features included in your chosen plan.' }
+  ];
+
+  const schema = combineSchemas(
+    generateProductListSchema(subscriptionPlans),
+    generateFAQSchema(faqData)
+  );
+
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
+    <>
+      <SEO
+        title="Subscription Plans - Choose Your Islamic Dating Plan"
+        description="Choose the perfect subscription plan for your Islamic dating journey. From free to VIP, find the plan that matches your needs. Secure halal matchmaking with premium features."
+        keywords="islamic dating subscription, muslim dating plans, halal matchmaking premium, muslim dating pricing"
+        canonicalUrl="https://islamicdating.com/subscription"
+        schema={schema}
+      />
+      <Breadcrumbs />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        {/* Header */}
       <Box textAlign="center" mb={6}>
         <Typography
           variant="h3"
@@ -322,21 +371,34 @@ const Subscription = () => {
                 
                 <Box sx={{ mt: 3 }}>
                   {isPremium ? (
-                    <Button
-                      variant="contained"
-                      size="large"
-                      disabled
-                      fullWidth
-                      sx={{
-                        background: 'linear-gradient(45deg, #FF8F00, #FFA000)',
-                        '&:disabled': {
-                          background: 'linear-gradient(45deg, #FF8F00, #FFA000)',
-                          color: 'white'
-                        }
-                      }}
-                    >
-                      Current Plan
-                    </Button>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        fullWidth
+                        onClick={handleManageSubscription}
+                        disabled={portalLoading || !user?.subscription?.stripeCustomerId}
+                        startIcon={portalLoading ? <CircularProgress size={20} color="inherit" /> : <Payment />}
+                        sx={{
+                          background: 'linear-gradient(45deg, #2E7D32, #4CAF50)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #1B5E20, #2E7D32)'
+                          }
+                        }}
+                      >
+                        {portalLoading ? 'Loading...' : 'Manage Subscription'}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="medium"
+                        fullWidth
+                        color="error"
+                        onClick={() => setCancelDialog(true)}
+                        startIcon={<Cancel />}
+                      >
+                        Cancel Plan
+                      </Button>
+                    </Box>
                   ) : (
                     <Button
                       variant="contained"
@@ -525,6 +587,7 @@ const Subscription = () => {
         </DialogActions>
       </Dialog>
     </Container>
+    </>
   );
 };
 
