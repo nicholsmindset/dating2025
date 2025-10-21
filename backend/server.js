@@ -55,6 +55,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/pusher', require('./routes/pusher'));
 app.use('/api/wali', require('./routes/wali'));
 app.use('/api/photo-verification', require('./routes/photoVerification'));
+app.use('/api/moderation', require('./routes/moderation'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

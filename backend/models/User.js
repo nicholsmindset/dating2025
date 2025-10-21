@@ -270,8 +270,24 @@ const userSchema = new mongoose.Schema({
     reportedAt: {
       type: Date,
       default: Date.now
-    }
-  }]
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    reviewedAt: Date,
+    adminNotes: String,
+    action: String
+  }],
+
+  // Suspension details
+  suspensionReason: String,
+  suspendedAt: Date,
+  suspendedUntil: Date,
+  suspendedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }
 }, {
   timestamps: true
 });
