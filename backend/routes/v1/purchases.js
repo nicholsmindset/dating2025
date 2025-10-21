@@ -116,13 +116,18 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
 
       switch (purchase.itemType) {
         case 'profile_boost':
-          // Create profile boost
+          // Create profile boost with immediate activation
+          const now = new Date();
+          const boostDuration = ITEM_PRICING.profile_boost.duration || 30; // 30 minutes default
           const boost = new ProfileBoost({
             user: user._id,
             boostType: 'standard',
             status: 'scheduled',
-            duration: ITEM_PRICING.profile_boost.duration,
-            purchase: purchase._id
+            startTime: now,
+            endTime: new Date(now.getTime() + boostDuration * 60000),
+            duration: boostDuration,
+            purchase: purchase._id,
+            isAutoActivated: true
           });
           await boost.save();
           purchase.boostStartTime = boost.startTime;

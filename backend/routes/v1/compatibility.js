@@ -276,10 +276,68 @@ router.post('/quiz/submit', auth, async (req, res) => {
   try {
     const { answers } = req.body;
 
+    // Validate answers array
     if (!answers || !Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Quiz answers are required'
+      });
+    }
+
+    // Validate number of answers (should match quiz questions length)
+    if (answers.length > quizQuestions.length) {
+      return res.status(400).json({
+        success: false,
+        message: `Too many answers provided. Maximum ${quizQuestions.length} answers allowed.`
+      });
+    }
+
+    // Validate each answer structure and content
+    const validatedAnswers = [];
+    const seenQuestionIds = new Set();
+
+    for (const answer of answers) {
+      // Validate answer structure
+      if (!answer.questionId || !answer.answer) {
+        return res.status(400).json({
+          success: false,
+          message: 'Each answer must have questionId and answer fields'
+        });
+      }
+
+      // Check for duplicate answers
+      if (seenQuestionIds.has(answer.questionId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Duplicate answers for the same question are not allowed'
+        });
+      }
+      seenQuestionIds.add(answer.questionId);
+
+      // Validate question exists
+      const question = quizQuestions.find((q) => q._id === answer.questionId);
+      if (!question) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid question ID: ${answer.questionId}`
+        });
+      }
+
+      // Validate answer value is a valid option
+      const option = question.options.find((o) => o.value === answer.answer);
+      if (!option) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid answer for question ${answer.questionId}`
+        });
+      }
+
+      // Add validated answer
+      validatedAnswers.push({
+        questionId: answer.questionId,
+        category: question.category,
+        answer: answer.answer,
+        points: option.points || 0
       });
     }
 
@@ -293,18 +351,8 @@ router.post('/quiz/submit', auth, async (req, res) => {
       });
     }
 
-    // Process answers
-    quiz.answers = answers.map((answer) => {
-      const question = quizQuestions.find((q) => q._id === answer.questionId);
-      const option = question?.options.find((o) => o.value === answer.answer);
-
-      return {
-        questionId: answer.questionId,
-        category: question?.category,
-        answer: answer.answer,
-        points: option?.points || 0
-      };
-    });
+    // Set validated answers
+    quiz.answers = validatedAnswers;
 
     // Complete quiz and calculate scores
     await quiz.completeQuiz();

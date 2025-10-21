@@ -107,24 +107,32 @@ router.post('/:userId/view', async (req, res) => {
       }
     }
 
-    // Add to profile views if not already viewed this month
+    // Add to profile views using atomic operation to prevent race conditions
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    
+
     const alreadyViewedThisMonth = currentUser.profileViews.some(view => {
       const viewDate = new Date(view.viewedAt);
       return view.profileId.toString() === req.params.userId &&
-             viewDate.getMonth() === currentMonth && 
+             viewDate.getMonth() === currentMonth &&
              viewDate.getFullYear() === currentYear;
     });
 
     if (!alreadyViewedThisMonth) {
-      currentUser.profileViews.push({
-        profileId: req.params.userId,
-        viewedAt: new Date()
-      });
-      await currentUser.save();
-      
+      // Use atomic $push operation to avoid race conditions
+      const updateResult = await User.findByIdAndUpdate(
+        req.user.id,
+        {
+          $push: {
+            profileViews: {
+              profileId: req.params.userId,
+              viewedAt: new Date()
+            }
+          }
+        },
+        { new: true }
+      );
+
       // Send profile view notification via Pusher
       const viewerInfo = {
         id: currentUser._id,
