@@ -25,6 +25,7 @@ import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import Onboarding from './pages/onboarding/Onboarding';
 import Dashboard from './pages/dashboard/Dashboard';
+import MyActivity from './pages/dashboard/MyActivity';
 import Profile from './pages/profile/Profile';
 import Chat from './pages/chat/Chat';
 import Subscription from './pages/subscription/Subscription';
@@ -75,7 +76,13 @@ function App() {
                         <Dashboard />
                       </ProtectedRoute>
                     } />
-                    
+
+                    <Route path="/my-activity" element={
+                      <ProtectedRoute>
+                        <MyActivity />
+                      </ProtectedRoute>
+                    } />
+
                     <Route path="/profile/:userId" element={
                       <ProtectedRoute>
                         <Profile />
