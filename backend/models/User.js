@@ -185,7 +185,18 @@ const userSchema = new mongoose.Schema({
   verificationToken: String,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
-  
+
+  // Photo Verification
+  isPhotoVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationBadge: {
+    type: String,
+    enum: ['none', 'verified', 'premium_verified'],
+    default: 'none'
+  },
+
   // Privacy Settings
   privacy: {
     showAge: { type: Boolean, default: true },
